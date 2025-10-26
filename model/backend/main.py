@@ -1,36 +1,27 @@
 from fastapi import FastAPI
-import psycopg2
+from db.connection import test_connection
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app= FastAPI()
 
-def get_db_connection():
-    try:
-        connection = psycopg2.connect(
-            dbaname = "lbl4_db",
-            user = "lbl_user",
-            password = '0702',
-            host = "loclhost",
-            port = "5432"
-        )
-        return connection
-    except Exception as e:
-        print("db connection error: ", e)
-        return None
+app.add_middleware(#enable to react(3000) access to backend(8000)
+    CORSMiddleware,
+    allow_origins=["*"],#open for everyone, maybe enable only for 3000
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def root():
     return {"message":"backend is running"}
 
+@app.get("/api/hello")
+def hello():
+    return {"message":"hello from fastapi backend"}
 
-@app.get("/tset_db")
+
+@app.get("/test_db")
 def test_db():
-    connection = get_db_connection()
-    if connection:
-        cursor = connection.cursor()
-        cursor.execute("SELECT version();")
-        version = cursor.fetchone()
-        cursor.close()
-        connection.close()
-        return {"db_connection": "OK", "version": version}
-    else:
-        return {"db_connection": "FAILED"}
+    return test_connection()

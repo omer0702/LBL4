@@ -1,25 +1,22 @@
-import logo from './logo.svg';
-import './App.css';
+import React,{useEffect, useState} from "react";
 
-function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+function App(){
+  const[backendMessage, setBackendMessage] = useState("");
+
+  useEffect(()=>{
+    fetch("http://127.0.0.1:8000/api/hello")
+    .then((response)=>response.json())
+    .then((data)=>setBackendMessage(data.message))
+    .catch((error)=>console.error("error connecting to backend:",error));
+  },[]);
+
+  return(
+    <div style={{textAlign:"center", marginTop:"50px"}}>
+      <h1>Frontend(react) connected to backend</h1>
+      <h2>{backendMessage ? backendMessage : "connecting..."}</h2>
     </div>
   );
 }
+
 
 export default App;
