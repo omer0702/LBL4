@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from db.connection import test_connection
+from db.connection import test_connection, get_test_data_from_db
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -13,6 +13,7 @@ app.add_middleware(#enable to react(3000) access to backend(8000)
     allow_headers=["*"],
 )
 
+#initial checks
 @app.get("/")
 def root():
     return {"message":"backend is running"}
@@ -25,3 +26,9 @@ def hello():
 @app.get("/test_db")
 def test_db():
     return test_connection()
+
+
+#check data from db to gui
+@app.get("/api/test_data_from_db")
+def test_data_from_db():
+    return {"services": get_test_data_from_db()}
