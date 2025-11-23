@@ -18,18 +18,18 @@ std::vector<uint8_t> build_frame(MessageType type, const uint8_t* payload, uint3
     buf.reserve(FRAME_HEADER_SIZE + payload_len);
 
     FrameHeader header;
-    header.magic = PROTO_MAGIC;
+    header.frame_signature = FRAME_SIGNATURE;
     header.message_type = static_cast<uint16_t>(type);
     header.payload_length = payload_len;
     header.reserved = 0;
 
     // serialize header to network byte order (big endian)
-    uint32_t magic_be = to_be32(header.magic);
+    uint32_t frame_signature_be = to_be32(header.frame_signature);
     uint16_t type_be = to_be16(header.message_type);
     uint32_t len_be = to_be32(header.payload_length);
     uint16_t res_be = to_be16(header.reserved);
 
-    buf.insert(buf.end(), reinterpret_cast<uint8_t*>(&magic_be), reinterpret_cast<uint8_t*>(&magic_be) + sizeof(magic_be));
+    buf.insert(buf.end(), reinterpret_cast<uint8_t*>(&frame_signature_be), reinterpret_cast<uint8_t*>(&frame_signature_be) + sizeof(frame_signature_be));
     buf.insert(buf.end(), reinterpret_cast<uint8_t*>(&type_be), reinterpret_cast<uint8_t*>(&type_be) + sizeof(type_be));
     buf.insert(buf.end(), reinterpret_cast<uint8_t*>(&len_be), reinterpret_cast<uint8_t*>(&len_be) + sizeof(len_be));
     buf.insert(buf.end(), reinterpret_cast<uint8_t*>(&res_be), reinterpret_cast<uint8_t*>(&res_be) + sizeof(res_be));
@@ -44,24 +44,25 @@ std::vector<uint8_t> build_frame(MessageType type, const uint8_t* payload, uint3
 DecodeResult parse_frame_header(const uint8_t* data, size_t data_len, FrameHeader& out_header) {
     if (data_len < FRAME_HEADER_SIZE) return DecodeResult::NEED_MORE_DATA;
 
-    // read values (remember network byte order)
-    uint32_t magic_be;
+    // read values (network byte order)
+    uint32_t frame_signature_be;
     uint16_t type_be;
     uint32_t len_be;
     uint16_t res_be;
 
-    std::memcpy(&magic_be, data, sizeof(magic_be));
+    std::memcpy(&frame_signature_be, data, sizeof(frame_signature_be));
     std::memcpy(&type_be, data + 4, sizeof(type_be));
     std::memcpy(&len_be, data + 6, sizeof(len_be));
     std::memcpy(&res_be, data + 10, sizeof(res_be));
 
-    out_header.magic = from_be32(magic_be);
+    out_header.frame_signature = from_be32(frame_signature_be);
     out_header.message_type = from_be16(type_be);
     out_header.payload_length = from_be32(len_be);
     out_header.reserved = from_be16(res_be);
 
-    if (out_header.magic != PROTO_MAGIC) return DecodeResult::INVALID_MAGIC;
+    if (out_header.frame_signature != FRAME_SIGNATURE) return DecodeResult::INVALID_MAGIC;
     if (out_header.payload_length > (1u<<24)) return DecodeResult::PAYLOAD_TOO_LARGE;
+    
     return DecodeResult::OK;
 }
 

@@ -7,8 +7,8 @@
 namespace lb::protocol::decoder {
 
 DecodeResult try_decode_frame(const uint8_t* data, size_t data_len,
-                             size_t& out_consumed,
-                             MessageType& out_type,
+                            size_t& out_consumed,//maybe delete
+                            MessageType& out_type,//change to uinit16_t
                              std::vector<uint8_t>& out_payload) {
     out_consumed = 0;
     out_type = MessageType::UNKNOWN;

@@ -2,11 +2,12 @@
 #include <cstdint>
 #include <cstring>
 #include <array>
+#include <endian.h>
 
 namespace lb::protocol {
 
 
-constexpr uint32_t PROTO_MAGIC = 0xAAAAAAAA;//has been changed
+constexpr uint32_t FRAME_SIGNATURE = 0xAAAAAAAA;
 constexpr size_t FRAME_HEADER_SIZE = 12;
 
 enum class MessageType : uint16_t {
@@ -33,25 +34,29 @@ enum class DecodeResult {
 };
 
 struct FrameHeader {
-    uint32_t magic;
-    uint16_t message_type;
+    uint32_t frame_signature;
+    uint16_t message_type;//change uint16_t to MessageType
     uint32_t payload_length;
     uint16_t reserved;
 
-    FrameHeader() : magic(PROTO_MAGIC), message_type(0), payload_length(0), reserved(0) {}
+    FrameHeader() : frame_signature(FRAME_SIGNATURE), message_type(0), payload_length(0), reserved(0) {}
 };
 
-// Convert 16/32 bit to network byte order
-inline uint16_t to_be16(uint16_t v) {
-    return (uint16_t)(((v & 0xff) << 8) | ((v & 0xff00) >> 8));
-}
-inline uint32_t to_be32(uint32_t v) {
-    return ((v & 0x000000ff) << 24) |
-           ((v & 0x0000ff00) << 8)  |
-           ((v & 0x00ff0000) >> 8)  |
-           ((v & 0xff000000) >> 24);
-}
-inline uint16_t from_be16(uint16_t v) { return to_be16(v); }
-inline uint32_t from_be32(uint32_t v) { return to_be32(v); }
+//Convert 16/32 bit to network byte order
+// inline uint16_t to_be16(uint16_t v) {
+//     return (uint16_t)(((v & 0xff) << 8) | ((v & 0xff00) >> 8));
+// }
+// inline uint32_t to_be32(uint32_t v) {
+//     return ((v & 0x000000ff) << 24) |
+//            ((v & 0x0000ff00) << 8)  |
+//            ((v & 0x00ff0000) >> 8)  |
+//            ((v & 0xff000000) >> 24);
+// }
+
+inline uint16_t to_be16(uint16_t v) {return htobe16(v);}
+inline uint16_t from_be16(uint16_t v) { return be16toh(v); }
+
+inline uint32_t to_be32(uint32_t v) { return htobe32(v); }
+inline uint32_t from_be32(uint32_t v) { return be32toh(v); }
 
 }
