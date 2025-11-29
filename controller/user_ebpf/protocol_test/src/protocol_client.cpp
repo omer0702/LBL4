@@ -28,13 +28,19 @@ int main(){
     }
 
     lb::InitRequest req;
-    req.set_service_name("service-A");
+    req.set_service_name("serviceA");
     req.set_instance_id("abc123");
     req.set_session_token("");
 
     auto bytes = lb::protocol::encoder::encode_init_request(req);
     
-    send(sock, bytes.data(), bytes.size(), 0);
+    if(send(sock, bytes.data(), bytes.size(), 0) != (ssize_t)bytes.size()) {
+        std::cerr << "Send failed\n";
+        close(sock);
+        return 1;
+    }
+    std::cout << "send success\n";
+
 
     uint8_t buffer[1024];
     int n = recv(sock, buffer, sizeof(buffer), 0);
@@ -43,17 +49,19 @@ int main(){
         return 1;
     }
 
-    lb::protocol::FrameHeader header;
-    if(lb::protocol::parse_frame_header(buffer, n, header) == lb::protocol::DecodeResult::INVALID_HEADER) {
-        std::cerr << "Failed to parse frame header\n";
-        return 1;
-    };
-
-    lb::InitResponse resp;
+    lb::protocol::MessageType type;
+    std::vector<uint8_t> payload;
     size_t consumed = 0;
-    auto type = static_cast<lb::protocol::MessageType>(header.message_type);
-    if(lb::protocol::decoder::try_decode_frame(buffer, n, consumed, type, bytes) != lb::protocol::DecodeResult::OK) {
+
+    auto result = lb::protocol::decoder::try_decode_frame(buffer, n, consumed, type, payload);
+    if(result != lb::protocol::DecodeResult::OK) {
         std::cerr << "Failed to decode frame\n";
+        return 1;
+    }
+    
+    lb::InitResponse resp;
+    if(!resp.ParseFromArray(payload.data(), payload.size())) {
+        std::cerr << "Failed to parse InitResponse\n";
         return 1;
     }
 

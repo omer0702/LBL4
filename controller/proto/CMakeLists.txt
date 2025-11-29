@@ -1,5 +1,3 @@
-find_package(Protobuf REQUIRED)
-
 set(PROTO_SRC
     service.proto
 )
@@ -13,4 +11,9 @@ add_library(proto_files STATIC
 
 target_include_directories(proto_files PUBLIC
     ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(proto_files PUBLIC
+    protobuf::libprotobuf
 )
