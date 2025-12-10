@@ -66,6 +66,7 @@ int main(){
     }
 
     std::cout << "InitResponse: accepted=" << resp.accepted() << ", token=" << resp.session_token() << "\n";
+    //maybe add print of 'reason' if accepted = 0
 
     close(sock);
     return 0;

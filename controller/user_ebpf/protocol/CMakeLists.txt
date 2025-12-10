@@ -14,10 +14,12 @@ add_library(protocol STATIC
 
 target_include_directories(protocol PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR}/build/debug/controller/proto
 )
 
 target_link_libraries(protocol PUBLIC
     proto_files
     protobuf::libprotobuf
 )
+
+add_dependencies(protocol proto_files)

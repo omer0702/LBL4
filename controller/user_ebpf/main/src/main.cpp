@@ -1,19 +1,48 @@
-#include <iostream>
-#include "main.h"
 #include "io_epoll.h"
-#include <cstdio>
+#include "protocol_encoder.h"
+#include "service.pb.h"
+#include <iostream>
 
+using namespace lb;
 
-int main(){
-    std::cout << "load balancer starting..." << std::endl;
+int main() {
+    uint16_t port = 8080;
+    int listen_fd = lb::io_epoll::start_listen(port);
+    if (listen_fd < 0) return 1;
 
-    int listen_fd = ioepoll_listener();
-    if(listen_fd < 0){
-        std::cerr << "Failed to set up listener." << std::endl;
-        return 1;
-    }
+    // register handler
+    lb::io_epoll::MessageHandler handler = [](int fd, lb::protocol::MessageType msg_type, const std::vector<uint8_t>& payload){
+        if (msg_type == lb::protocol::MessageType::INIT_REQ) {
+            lb::InitRequest req;
+            if (!req.ParseFromArray(payload.data(), payload.size())) {
+                std::cerr << "bad init parse\n";
+                return;
+            }
+            std::cout << "[HANDLER] init from " << req.service_name() << "\n";
 
-    ioepoll_run_loop(listen_fd);
+            lb::InitResponse resp;
+            if (req.service_name() == "serviceA") {
+                resp.set_accepted(true);
+                resp.set_session_token("TOKEN_ABC123");
+                resp.set_reason("OK");
+            } else {
+                resp.set_accepted(false);
+                resp.set_session_token("");
+                resp.set_reason("forbidden");
+            }
+            auto out = lb::protocol::encoder::encode_init_ack(resp);
+            lb::io_epoll::send_all(fd, out);
+        }
+        else if (msg_type == lb::protocol::MessageType::REPORT) {
+            lb::ServiceReport r;
+            if (r.ParseFromArray(payload.data(), payload.size())) {
+                std::cout << "[HANDLER] report cpu=" << r.cpu_usage() << "\n";
+                // process, update maps, DB, etc.
+            }
+        }
+        // add other types...
+    };
 
+    lb::io_epoll::run_loop(listen_fd, handler);
     return 0;
 }

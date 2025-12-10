@@ -3,7 +3,9 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/controller/user_ebpf/protocol/include",
+                "${workspaceFolder}/build/debug/controller/proto"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/g++",

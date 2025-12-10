@@ -7,6 +7,8 @@ target_include_directories(lb_app PUBLIC
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/io_epoll/include
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/handle_maps/include
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/recovery/include
+    ${CMAKE_SOURCE_DIR}/controller/user_ebpf/protocol/include
+
 )
 
 target_link_libraries(lb_app 
@@ -14,4 +16,5 @@ target_link_libraries(lb_app
     handle_maps
     recovery
     proto_files
+    protocol
 )
