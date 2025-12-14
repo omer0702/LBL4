@@ -10,7 +10,6 @@ int main() {
     int listen_fd = lb::io_epoll::start_listen(port);
     if (listen_fd < 0) return 1;
 
-    // register handler
     lb::io_epoll::MessageHandler handler = [](int fd, lb::protocol::MessageType msg_type, const std::vector<uint8_t>& payload){
         if (msg_type == lb::protocol::MessageType::INIT_REQ) {
             lb::InitRequest req;
@@ -37,10 +36,9 @@ int main() {
             lb::ServiceReport r;
             if (r.ParseFromArray(payload.data(), payload.size())) {
                 std::cout << "[HANDLER] report cpu=" << r.cpu_usage() << "\n";
-                // process, update maps, DB, etc.
+                //update maps, DB and more
             }
         }
-        // add other types...
     };
 
     lb::io_epoll::run_loop(listen_fd, handler);

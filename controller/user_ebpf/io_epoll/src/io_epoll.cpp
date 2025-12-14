@@ -5,7 +5,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/socket.h>
-
 #include <iostream>
 #include <cstring>
 #include <map>
@@ -15,7 +14,7 @@
 
 namespace lb::io_epoll {
 
-static bool g_running = true;
+static bool running = true;
 
 static int make_nonblocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
@@ -63,7 +62,6 @@ ssize_t send_all(int fd, const uint8_t* data, size_t len) {
         if (n < 0) {
             if (errno == EINTR) continue;
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                // for simplicity: sleep a tiny bit and retry (could use epoll-out in production)
                 usleep(1000);
                 continue;
             }
@@ -79,7 +77,7 @@ ssize_t send_all(int fd, const std::vector<uint8_t>& bytes) {
 }
 
 void stop_loop() {
-    g_running = false;
+    running = false;
 }
 
 void run_loop(int listen_fd, MessageHandler handler) {
@@ -96,15 +94,14 @@ void run_loop(int listen_fd, MessageHandler handler) {
         return;
     }
 
-    // per-connection buffers
     std::unordered_map<int, std::vector<uint8_t>> conn_buf;
 
     epoll_event events[MAX_EVENTS];
 
     std::cout << "[EPOLL] Listening...\n";
 
-    while (g_running) {
-        int n = epoll_wait(epfd, events, MAX_EVENTS, 1000); // 1s timeout to allow graceful stop
+    while (running) {
+        int n = epoll_wait(epfd, events, MAX_EVENTS, 1000);
         if (n < 0) {
             if (errno == EINTR) continue;
             perror("epoll_wait");
@@ -117,7 +114,6 @@ void run_loop(int listen_fd, MessageHandler handler) {
             uint32_t ev_flags = events[i].events;
 
             if (fd == listen_fd) {
-                // accept new connections (loop because non-blocking)
                 while (true) {
                     int client = accept(listen_fd, nullptr, nullptr);
                     if (client < 0) {
@@ -134,11 +130,10 @@ void run_loop(int listen_fd, MessageHandler handler) {
                         close(client);
                         continue;
                     }
-                    conn_buf.emplace(client, std::vector<uint8_t>{}); // create empty buffer
+                    conn_buf.emplace(client, std::vector<uint8_t>{});
                     std::cout << "[EPOLL] New client: fd=" << client << "\n";
                 }
             } else {
-                // hangup or error
                 if (ev_flags & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
                     std::cout << "[EPOLL] Client disconnected: fd=" << fd << "\n";
                     epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nullptr);
@@ -148,7 +143,6 @@ void run_loop(int listen_fd, MessageHandler handler) {
                 }
 
                 if (ev_flags & EPOLLIN) {
-                    // read data (non-blocking)
                     bool closed = false;
                     while (true) {
                         uint8_t tmp[4096];
@@ -163,7 +157,6 @@ void run_loop(int listen_fd, MessageHandler handler) {
                             closed = true;
                             break;
                         } else {
-                            // append received bytes to buffer
                             auto &buf = conn_buf[fd];
                             buf.insert(buf.end(), tmp, tmp + r);
                         }
@@ -176,7 +169,6 @@ void run_loop(int listen_fd, MessageHandler handler) {
                         continue;
                     }
 
-                    // try to decode as many frames as possible from the buffer
                     auto it = conn_buf.find(fd);
                     if (it == conn_buf.end()) continue;
                     auto &buffer = it->second;
@@ -195,44 +187,38 @@ void run_loop(int listen_fd, MessageHandler handler) {
                         );
 
                         if (res == DecodeResult::OK) {
-                            // handle message in user-provided handler
                             try {
                                 handler(fd, type, payload);
                             } catch (const std::exception &ex) {
                                 std::cerr << "[EPOLL] handler threw: " << ex.what() << "\n";
                             }
 
-                            // remove consumed bytes
                             if (consumed <= buffer.size()) {
                                 buffer.erase(buffer.begin(), buffer.begin() + consumed);
                             } else {
-                                // shouldn't happen, but protect
                                 buffer.clear();
                                 break;
                             }
-                            continue; // try to decode next frame
+                            continue;
                         } else if (res == DecodeResult::NEED_MORE_DATA) {
-                            // wait for more data
                             break;
                         } else {
-                            // invalid header or other error -> drop connection
                             std::cerr << "[EPOLL] decode error (invalid header?) on fd=" << fd << ", dropping\n";
                             epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nullptr);
                             close(fd);
                             conn_buf.erase(fd);
                             break;
                         }
-                    } // end while(buffer not empty)
-                } // EPOLLIN
-            } // else not listen_fd
-        } // for events
-    } // while running
+                    }
+                } 
+            }
+        }
+    } 
 
-    // cleanup
     for (auto &p : conn_buf) {
         close(p.first);
     }
     close(epfd);
 }
 
-} // namespace lb::io_epoll
+}
