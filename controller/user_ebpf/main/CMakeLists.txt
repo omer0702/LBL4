@@ -17,4 +17,6 @@ target_link_libraries(lb_app
     recovery
     proto_files
     protocol
+    session_manager
+    handlers
 )

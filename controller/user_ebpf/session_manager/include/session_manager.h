@@ -1,11 +1,10 @@
 #pragma once
-#include <string>
 #include <unordered_map>
 #include <optional>
 #include <chrono>
 #include <mutex>
-
-
+#include <vector>
+#include <string>
 namespace lb::session {
 
 
@@ -34,8 +33,9 @@ public:
     std::string create_session(int fd, const std::string& service_name);
     std::optional<SessionInfo> get_session_by_fd(int fd);
     std::optional<SessionInfo> get_session_by_token(const std::string& token);
-
-
+    std::vector<int> get_expired_sessions(int timeout_seconds);
+    std::vector<int> get_all_session_fds();
+    bool has_session(int fd);
     void update_last_seen(int fd);
     void remove_session(int fd);
 

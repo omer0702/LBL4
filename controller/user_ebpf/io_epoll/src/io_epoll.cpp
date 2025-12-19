@@ -8,13 +8,52 @@
 #include <iostream>
 #include <cstring>
 #include <map>
+#include <sys/timerfd.h>
 
 #include "protocol_decoder.h"
 #include "protocol_encoder.h"
+#include "session_manager.h"
 
 namespace lb::io_epoll {
 
 static bool running = true;
+int timerfd;
+int active_connections = 0;
+const int MAX_CONNECTIONS = 1000;
+int timer_tick_counter = 0;
+
+void setup_timer(int epfd) {
+    timerfd = timerfd_create(CLOCK_MONOTONIC, 0);
+    if (timerfd == -1) {
+        perror("timerfd_create");
+        return;
+    }
+
+    itimerspec ts{};
+    ts.it_interval.tv_sec = 1;
+    ts.it_interval.tv_nsec = 0;
+    ts.it_value.tv_sec = 1;
+    ts.it_value.tv_nsec = 0;
+
+
+    if (timerfd_settime(timerfd, 0, &ts, NULL) == -1) {
+        perror("timerfd_settime");
+        close(timerfd);
+        return;
+    }
+
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.fd = timerfd;
+    epoll_ctl(epfd, EPOLL_CTL_ADD, timerfd, &ev);
+}
+
+void close_client(int fd, int epfd, std::unordered_map<int, std::vector<uint8_t>>& conn_buf, int& active_connections) {
+    epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
+    close(fd);
+    active_connections--;
+    conn_buf.erase(fd);
+}
 
 static int make_nonblocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
@@ -85,6 +124,8 @@ void run_loop(int listen_fd, MessageHandler handler) {
     int epfd = epoll_create1(0);
     if (epfd < 0) { perror("epoll_create1"); return; }
 
+    setup_timer(epfd);
+
     epoll_event ev{};
     ev.events = EPOLLIN;
     ev.data.fd = listen_fd;
@@ -115,12 +156,19 @@ void run_loop(int listen_fd, MessageHandler handler) {
 
             if (fd == listen_fd) {
                 while (true) {
+                    if( active_connections >= MAX_CONNECTIONS) {//handle flood(DOS) problem
+                        std::cerr << "[EPOLL] Max connections reached, rejecting new connections\n";
+                        break;
+                    }
+
                     int client = accept(listen_fd, nullptr, nullptr);
                     if (client < 0) {
                         if (errno == EAGAIN || errno == EWOULDBLOCK) break;
                         perror("accept");
                         break;
                     }
+
+                    active_connections++;
                     make_nonblocking(client);
                     epoll_event cev{};
                     cev.events = EPOLLIN | EPOLLRDHUP | EPOLLHUP | EPOLLERR;
@@ -133,12 +181,31 @@ void run_loop(int listen_fd, MessageHandler handler) {
                     conn_buf.emplace(client, std::vector<uint8_t>{});
                     std::cout << "[EPOLL] New client: fd=" << client << "\n";
                 }
-            } else {
+            } 
+            else if(fd == timerfd){
+                uint64_t expirations;
+                read(timerfd, &expirations, sizeof(expirations));
+                auto expired_fds = lb::session::SessionManager::instance().get_expired_sessions(30);
+                for (int e_fd : expired_fds) {//handle zombie sessions problem(keepalive fail)
+                    std::cout << "[EPOLL] Session expired due to inactivity: fd=" << e_fd << "\n";
+                    lb::session::SessionManager::instance().remove_session(e_fd);
+                    close_client(e_fd, epfd, conn_buf, active_connections);
+                }
+
+                timer_tick_counter++;
+                auto active_fds = lb::session::SessionManager::instance().get_all_session_fds();
+                for( int a_fd : active_fds ) {
+                    //send_keepalive_request(a_fd);
+                    if(timer_tick_counter % 5 == 0) {
+                        //send_get_reports_request(a_fd);
+                    }
+                }
+            }
+            else {
                 if (ev_flags & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
                     std::cout << "[EPOLL] Client disconnected: fd=" << fd << "\n";
-                    epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nullptr);
-                    close(fd);
-                    conn_buf.erase(fd);
+                    lb::session::SessionManager::instance().remove_session(fd);//handle sudden disconnects problem
+                    close_client(fd, epfd, conn_buf, active_connections);
                     continue;
                 }
 
@@ -220,5 +287,7 @@ void run_loop(int listen_fd, MessageHandler handler) {
     }
     close(epfd);
 }
+
+
 
 }
