@@ -13,6 +13,7 @@
 #include "protocol_decoder.h"
 #include "protocol_encoder.h"
 #include "session_manager.h"
+#include "handlers.h"
 
 namespace lb::io_epoll {
 
@@ -94,32 +95,79 @@ int start_listen(uint16_t port) {
     return fd;
 }
 
-ssize_t send_all(int fd, const uint8_t* data, size_t len) {
-    size_t total = 0;
-    while (total < len) {
-        ssize_t n = send(fd, data + total, len - total, 0);
-        if (n < 0) {
-            if (errno == EINTR) continue;
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                usleep(1000);
-                continue;
-            }
-            return -1;
-        }
-        total += (size_t)n;
-    }
-    return (ssize_t)total;
-}
+// ssize_t send_all(int fd, const uint8_t* data, size_t len) {
+//     size_t total = 0;
+//     while (total < len) {
+//         ssize_t n = send(fd, data + total, len - total, 0);
+//         if (n < 0) {
+//             if (errno == EINTR) continue;
+//             if (errno == EAGAIN || errno == EWOULDBLOCK) {
+//                 usleep(1000);
+//                 continue;
+//             }
+//             return -1;
+//         }
+//         total += (size_t)n;
+//     }
+//     return (ssize_t)total;
+// }
 
-ssize_t send_all(int fd, const std::vector<uint8_t>& bytes) {
-    return send_all(fd, bytes.data(), bytes.size());
-}
+// ssize_t send_all(int fd, const std::vector<uint8_t>& bytes) {
+//     return send_all(fd, bytes.data(), bytes.size());
+// }
 
 void stop_loop() {
     running = false;
 }
 
-void run_loop(int listen_fd, MessageHandler handler) {
+void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payload, int epfd,
+                    std::unordered_map<int, std::vector<uint8_t>>& conn_buf,
+                    int& active_connections) {
+    HandlerResult res;
+
+    switch (type) {
+        case MessageType::INIT_REQ:
+            res = lb::handlers::handle_init_req(fd, payload);
+            break;
+        case MessageType::KEEPALIVE_RESP:
+            res = lb::handlers::handle_keepalive_resp(fd, payload);
+            break;
+        case MessageType::REPORT:
+            res = lb::handlers::handle_get_report_resp(fd, payload);
+            break;
+        case MessageType::CLOSE_REQ:
+            res = lb::handlers::handle_close_req(fd, payload);
+            break;
+        default:
+            std::cerr << "[EPOLL] Unknown message type received: fd=" << fd << "\n";
+            break;
+    }
+
+    if(res == HandlerResult::CLOSE_CONNECTION){
+        std::cout << "[EPOLL] Closing connection as per handler request: fd=" << fd << "\n";
+        lb::session::SessionManager::instance().remove_session(fd);
+        close_client(fd, epfd, conn_buf, active_connections);
+    }
+}
+
+void send_keepalive_request(int fd) {
+    lb::KeepAlive ka;
+    ka.set_timestamp(static_cast<uint64_t>(time(nullptr)));
+
+    auto bytes = lb::protocol::encoder::encode_keepalive_req(ka);
+    lb::handlers::send_all(fd, bytes);
+}
+
+void send_get_reports_request(int fd) {
+    lb::GetReport gr;
+    gr.set_session_token(lb::session::SessionManager::instance().get_session_by_fd(fd)->token);
+
+    auto bytes = lb::protocol::encoder::encode_get_reports_req(gr);
+    lb::handlers::send_all(fd, bytes);
+}
+
+
+void run_loop(int listen_fd) {
     const int MAX_EVENTS = 64;
     int epfd = epoll_create1(0);
     if (epfd < 0) { perror("epoll_create1"); return; }
@@ -195,9 +243,9 @@ void run_loop(int listen_fd, MessageHandler handler) {
                 timer_tick_counter++;
                 auto active_fds = lb::session::SessionManager::instance().get_all_session_fds();
                 for( int a_fd : active_fds ) {
-                    //send_keepalive_request(a_fd);
+                    send_keepalive_request(a_fd);
                     if(timer_tick_counter % 5 == 0) {
-                        //send_get_reports_request(a_fd);
+                        send_get_reports_request(a_fd);
                     }
                 }
             }
@@ -254,11 +302,12 @@ void run_loop(int listen_fd, MessageHandler handler) {
                         );
 
                         if (res == DecodeResult::OK) {
-                            try {
-                                handler(fd, type, payload);
-                            } catch (const std::exception &ex) {
-                                std::cerr << "[EPOLL] handler threw: " << ex.what() << "\n";
-                            }
+                            choose_handler(fd, type, payload, epfd, conn_buf, active_connections);
+                            // try {
+                            //     handler(fd, type, payload);
+                            // } catch (const std::exception &ex) {
+                            //     std::cerr << "[EPOLL] handler threw: " << ex.what() << "\n";
+                            // }
 
                             if (consumed <= buffer.size()) {
                                 buffer.erase(buffer.begin(), buffer.begin() + consumed);

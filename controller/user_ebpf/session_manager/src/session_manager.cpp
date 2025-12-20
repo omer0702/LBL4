@@ -32,6 +32,7 @@ std::string SessionManager::create_session(int fd, const std::string& service_na
         service_name,
         token,
         SessionState::ACTIVE,
+        ServiceMetrics{},
         std::chrono::steady_clock::now()
     };
 
@@ -106,6 +107,20 @@ void SessionManager::remove_session(int fd) {
 
     fd_by_token.erase(it->second.token);
     sessions_by_fd.erase(it);
+}
+
+void SessionManager::update_metrics(int fd, const lb::ServiceReport& report) {
+    std::lock_guard<std::mutex> lock(mtx);
+    auto it = sessions_by_fd.find(fd);
+    if (it != sessions_by_fd.end()) {
+        auto& metrics = it->second.metrics;
+        metrics.cpu_usage = report.cpu_usage();
+        metrics.memory_usage = report.memory_usage();
+        metrics.active_requests = report.active_requests();
+        metrics.last_report = std::chrono::steady_clock::now();
+
+        it->second.last_seen = metrics.last_report;
+    }
 }
 
 }

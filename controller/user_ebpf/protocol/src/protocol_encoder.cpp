@@ -31,6 +31,9 @@ std::vector<uint8_t> encode_get_reports_req(const ::lb::GetReport& msg) {
 std::vector<uint8_t> encode_report(const ::lb::ServiceReport& msg) {
     return serialize_protobuf_to_frame(msg, MessageType::REPORT);
 }
+std::vector<uint8_t> encode_get_reports_resp(const ::lb::GetReportAck& msg) {
+    return serialize_protobuf_to_frame(msg, MessageType::GET_REPORTS_RESP);
+}
 std::vector<uint8_t> encode_close_req(const ::lb::CloseRequest& msg) {
     return serialize_protobuf_to_frame(msg, MessageType::CLOSE_REQ);
 }

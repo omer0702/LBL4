@@ -18,8 +18,9 @@ enum class MessageType : uint16_t {
     KEEPALIVE_RESP = 4,
     GET_REPORTS_REQ = 5,
     REPORT = 6,
-    CLOSE_REQ = 7,
-    CLOSE_ACK = 8,
+    GET_REPORTS_RESP = 7,
+    CLOSE_REQ = 8,
+    CLOSE_ACK = 9,
     ERROR = 0xFFFF
 };
 

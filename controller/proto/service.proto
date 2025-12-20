@@ -41,6 +41,11 @@ message GetReport{
     string session_token = 1; 
 }
 
+message GetReportAck{
+    bool ok = 1;
+    string message = 2;
+}
+
 message CloseAck{
     bool ok = 1;
     string message = 2;

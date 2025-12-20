@@ -2,11 +2,31 @@
 #include "protocol_encoder.h"
 #include <iostream>
 #include "service.pb.h"
-#include "io_epoll.h"
+#include <sys/socket.h>
 
 using namespace lb::protocol;
 
 namespace lb::handlers {
+ssize_t send_all(int fd, const uint8_t* data, size_t len) {
+    size_t total = 0;
+    while (total < len) {
+        ssize_t n = send(fd, data + total, len - total, 0);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                usleep(1000);
+                continue;
+            }
+            return -1;
+        }
+        total += (size_t)n;
+    }
+    return (ssize_t)total;
+}
+
+ssize_t send_all(int fd, const std::vector<uint8_t>& bytes) {
+    return send_all(fd, bytes.data(), bytes.size());
+}
 
 HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload) {
     lb::InitRequest req;
@@ -31,7 +51,7 @@ HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload) {
     resp.set_reason("OK");
 
     auto bytes = encoder::encode_init_ack(resp);
-    lb::io_epoll::send_all(fd, bytes);
+    send_all(fd, bytes);
 
     return HandlerResult::OK;
 }
@@ -48,7 +68,7 @@ HandlerResult handle_close_req(int fd, const std::vector<uint8_t>& payload) {
     lb::CloseAck resp;
     resp.set_ok(true);
     auto bytes = encoder::encode_close_ack(resp);
-    lb::io_epoll::send_all(fd, bytes);
+    send_all(fd, bytes);
 
     sm.remove_session(fd);
 
@@ -70,7 +90,7 @@ HandlerResult handle_keepalive_resp(int fd, const std::vector<uint8_t>& payload)
 
 
 HandlerResult handle_get_report_resp(int fd, const std::vector<uint8_t>& payload) {
-    lb::GetReport report;
+    lb::ServiceReport report;
     if (!report.ParseFromArray(payload.data(), payload.size())) {
         std::cerr << "[HANDLER] Failed to parse GetReport\n";
         return HandlerResult::ERROR;
@@ -82,11 +102,11 @@ HandlerResult handle_get_report_resp(int fd, const std::vector<uint8_t>& payload
         return HandlerResult::ERROR;
     }
 
-    // sm.update_metrics(fd, report);
-    // lb::ReportAck resp;
-    // resp.set_received(true);
-    // auto bytes = encoder::encode_report_ack(resp);
-    // lb::io_epoll::send_all(fd, bytes);
+    sm.update_metrics(fd, report);
+    lb::GetReportAck resp;
+    resp.set_ok(true);
+    auto bytes = encoder::encode_get_reports_resp(resp);
+    send_all(fd, bytes);
 
     std::cout<<"[HANDLER] metrics updated fd=" << fd << "\n";
 

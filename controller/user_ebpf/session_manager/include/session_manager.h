@@ -5,6 +5,8 @@
 #include <mutex>
 #include <vector>
 #include <string>
+#include "../../../../build/debug/controller/proto/service.pb.h"
+
 namespace lb::session {
 
 
@@ -16,12 +18,19 @@ enum class SessionState {
     UNREACHABLE 
 };
 
+struct ServiceMetrics{
+    uint32_t cpu_usage = 0;
+    uint32_t memory_usage = 0;
+    uint32_t active_requests = 0;
+    std::chrono::steady_clock::time_point last_report;
+};
 
 struct SessionInfo {
     int fd;
     std::string service_name;
     std::string token;
     SessionState state;
+    ServiceMetrics metrics;
     std::chrono::steady_clock::time_point last_seen;//for keepalive logs
 };
 
@@ -38,6 +47,7 @@ public:
     bool has_session(int fd);
     void update_last_seen(int fd);
     void remove_session(int fd);
+    void update_metrics(int fd, const lb::ServiceReport& report);
 
 private:
     SessionManager() = default;
