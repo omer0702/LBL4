@@ -57,12 +57,29 @@ HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload) {
 }
 
 HandlerResult handle_close_req(int fd, const std::vector<uint8_t>& payload) {
-    std::cout<<"[HANDLER] CloseRequest received, closing connection: fd=" << fd << "\n";
     auto& sm = lb::session::SessionManager::instance();
     
+    lb::CloseRequest req;
+    if (!req.ParseFromArray(payload.data(), payload.size())) {
+        std::cerr << "[HANDLER] Failed to parse CloseRequest\n";
+        return HandlerResult::CLOSE_CONNECTION;
+    }
+    std::cout<< "[HANDLER] CloseRequest received from fd: " << fd << "\n";//maybe add token(add token to service.proto at CloseRequest)
+    auto session = sm.get_session_by_fd(fd);
+
     if(!sm.has_session(fd)) {
         std::cerr << "[HANDLER] no session for fd: " << fd << "\n";
         return HandlerResult::CLOSE_CONNECTION;
+    }
+
+    if(session->token != req.session_token()) {//so that one client doesnt close another's session
+        std::cerr << "[HANDLER] invalid session token for fd: " << fd << "expected: " << session->token << " got: " << req.session_token() << "\n";
+        lb::CloseAck resp;
+        resp.set_ok(false);
+        auto bytes = encoder::encode_close_ack(resp);
+        send_all(fd, bytes);
+
+        return HandlerResult::CLOSE_CONNECTION;//maybe change to OK
     }
 
     lb::CloseAck resp;
@@ -71,7 +88,8 @@ HandlerResult handle_close_req(int fd, const std::vector<uint8_t>& payload) {
     send_all(fd, bytes);
 
     sm.remove_session(fd);
-
+    std::cout<< "[HANDLER] Session for fd " << fd << " closed successfully" << "\n";
+    
     return HandlerResult::CLOSE_CONNECTION;
 }
 
@@ -103,6 +121,7 @@ HandlerResult handle_get_report_resp(int fd, const std::vector<uint8_t>& payload
     }
 
     sm.update_metrics(fd, report);
+    //sm.print_session_stats();
     lb::GetReportAck resp;
     resp.set_ok(true);
     auto bytes = encoder::encode_get_reports_resp(resp);

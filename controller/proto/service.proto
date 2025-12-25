@@ -22,6 +22,10 @@ message KeepAlive{
     uint64 timestamp = 2;
 }
 
+message KeepAliveResp{
+    string session_token = 1;
+}
+
 message ServiceReport{
     string session_token = 1;
     uint32 cpu_usage = 2;
@@ -31,7 +35,8 @@ message ServiceReport{
 
 message CloseRequest{
     string service_id = 1;
-    string reason = 2;
+    string session_token = 2;
+    string reason = 3;
 }
 
 

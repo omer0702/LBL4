@@ -54,6 +54,7 @@ void close_client(int fd, int epfd, std::unordered_map<int, std::vector<uint8_t>
     close(fd);
     active_connections--;
     conn_buf.erase(fd);
+    lb::session::SessionManager::instance().remove_session(fd);
 }
 
 static int make_nonblocking(int fd) {
@@ -133,7 +134,10 @@ void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payloa
             res = lb::handlers::handle_keepalive_resp(fd, payload);
             break;
         case MessageType::REPORT:
+            //std::cout << "here1\n";
             res = lb::handlers::handle_get_report_resp(fd, payload);
+            lb::session::SessionManager::instance().print_session_stats();
+            //std::cout << "here3\n";
             break;
         case MessageType::CLOSE_REQ:
             res = lb::handlers::handle_close_req(fd, payload);
@@ -145,7 +149,6 @@ void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payloa
 
     if(res == HandlerResult::CLOSE_CONNECTION){
         std::cout << "[EPOLL] Closing connection as per handler request: fd=" << fd << "\n";
-        lb::session::SessionManager::instance().remove_session(fd);
         close_client(fd, epfd, conn_buf, active_connections);
     }
 }
@@ -153,7 +156,8 @@ void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payloa
 void send_keepalive_request(int fd) {
     lb::KeepAlive ka;
     ka.set_timestamp(static_cast<uint64_t>(time(nullptr)));
-
+    ka.set_session_token(lb::session::SessionManager::instance().get_session_by_fd(fd)->token);
+    
     auto bytes = lb::protocol::encoder::encode_keepalive_req(ka);
     lb::handlers::send_all(fd, bytes);
 }
@@ -190,7 +194,7 @@ void run_loop(int listen_fd) {
     std::cout << "[EPOLL] Listening...\n";
 
     while (running) {
-        int n = epoll_wait(epfd, events, MAX_EVENTS, 1000);
+        int n = epoll_wait(epfd, events, MAX_EVENTS, -1);
         if (n < 0) {
             if (errno == EINTR) continue;
             perror("epoll_wait");
@@ -231,12 +235,11 @@ void run_loop(int listen_fd) {
                 }
             } 
             else if(fd == timerfd){
-                uint64_t expirations;
+                uint64_t expirations;//contains how many times the timer has "rung" since the last call(if >1, we missed some)
                 read(timerfd, &expirations, sizeof(expirations));
-                auto expired_fds = lb::session::SessionManager::instance().get_expired_sessions(30);
+                auto expired_fds = lb::session::SessionManager::instance().get_expired_sessions(20);
                 for (int e_fd : expired_fds) {//handle zombie sessions problem(keepalive fail)
                     std::cout << "[EPOLL] Session expired due to inactivity: fd=" << e_fd << "\n";
-                    lb::session::SessionManager::instance().remove_session(e_fd);
                     close_client(e_fd, epfd, conn_buf, active_connections);
                 }
 
@@ -250,9 +253,8 @@ void run_loop(int listen_fd) {
                 }
             }
             else {
-                if (ev_flags & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
+                if (ev_flags & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {//handle sudden disconnects problem
                     std::cout << "[EPOLL] Client disconnected: fd=" << fd << "\n";
-                    lb::session::SessionManager::instance().remove_session(fd);//handle sudden disconnects problem
                     close_client(fd, epfd, conn_buf, active_connections);
                     continue;
                 }
@@ -274,13 +276,16 @@ void run_loop(int listen_fd) {
                         } else {
                             auto &buf = conn_buf[fd];
                             buf.insert(buf.end(), tmp, tmp + r);
+                            if(buf.size() > 1024 * 1024) {
+                                std::cerr << "[EPOLL] Connection buffer overflow, closing fd=" << fd << "\n";
+                                closed = true;
+                                break;
+                            }
                         }
                     }
                     if (closed) {
                         std::cout << "[EPOLL] Client closed connection: fd=" << fd << "\n";
-                        epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nullptr);
-                        close(fd);
-                        conn_buf.erase(fd);
+                        close_client(fd, epfd, conn_buf, active_connections);
                         continue;
                     }
 
@@ -300,14 +305,9 @@ void run_loop(int listen_fd) {
                             type,
                             payload
                         );
-
+                        //std::cout << "type after decode: " << static_cast<uint16_t>(type) << "\n";
                         if (res == DecodeResult::OK) {
                             choose_handler(fd, type, payload, epfd, conn_buf, active_connections);
-                            // try {
-                            //     handler(fd, type, payload);
-                            // } catch (const std::exception &ex) {
-                            //     std::cerr << "[EPOLL] handler threw: " << ex.what() << "\n";
-                            // }
 
                             if (consumed <= buffer.size()) {
                                 buffer.erase(buffer.begin(), buffer.begin() + consumed);

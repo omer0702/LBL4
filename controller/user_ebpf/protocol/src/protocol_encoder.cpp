@@ -25,6 +25,9 @@ std::vector<uint8_t> encode_init_ack(const ::lb::InitResponse& msg) {
 std::vector<uint8_t> encode_keepalive_req(const ::lb::KeepAlive& msg) {
     return serialize_protobuf_to_frame(msg, MessageType::KEEPALIVE_REQ);
 }
+std::vector<uint8_t> encode_keepalive_resp(const ::lb::KeepAliveResp& msg) {
+    return serialize_protobuf_to_frame(msg, MessageType::KEEPALIVE_RESP);
+}
 std::vector<uint8_t> encode_get_reports_req(const ::lb::GetReport& msg) {
     return serialize_protobuf_to_frame(msg, MessageType::GET_REPORTS_REQ);
 }

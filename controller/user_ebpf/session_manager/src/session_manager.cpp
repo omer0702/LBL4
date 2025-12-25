@@ -1,5 +1,6 @@
 #include "session_manager.h"
 #include <random>
+#include <iomanip>
 
 namespace lb::session {
 
@@ -68,6 +69,7 @@ std::vector<int> SessionManager::get_expired_sessions(int timeout_seconds){
 
     for(const auto& [fd, session] : sessions_by_fd){
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - session.last_seen).count();
+        std::cout << duration << " seconds since last seen for fd=" << fd << "\n";
         if(duration > timeout_seconds){
             expired_fds.push_back(fd);
         }
@@ -120,6 +122,20 @@ void SessionManager::update_metrics(int fd, const lb::ServiceReport& report) {
         metrics.last_report = std::chrono::steady_clock::now();
 
         it->second.last_seen = metrics.last_report;
+    }
+}
+
+void SessionManager::print_session_stats(){
+    std::lock_guard<std::mutex> lock(mtx);
+    std::cout << "----- Session Statistics -----\n";//prints even if there is no sessions
+    for(const auto& [fd, session] : sessions_by_fd){
+        const auto& metrics = session.metrics;
+        std::cout << "FD: " << fd
+                  << ", Service: " << session.service_name
+                  << ", CPU: " << metrics.cpu_usage << "%"
+                  << ", Memory: " << metrics.memory_usage << "MB"
+                  << (session.state == SessionState::ACTIVE ? ", State: ACTIVE" : ", State: SUSPECTED")
+                  <<"\n";
     }
 }
 

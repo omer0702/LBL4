@@ -48,6 +48,7 @@ public:
     void update_last_seen(int fd);
     void remove_session(int fd);
     void update_metrics(int fd, const lb::ServiceReport& report);
+    void print_session_stats();
 
 private:
     SessionManager() = default;
