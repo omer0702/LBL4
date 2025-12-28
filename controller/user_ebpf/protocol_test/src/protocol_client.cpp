@@ -88,10 +88,10 @@ void handle_server_messages(int sock, std::string& token) {
                 std::cout << "[CLIENT] Received CloseAck from server. Closing connection.\n";
                 return;
             }
-            if(i > 2 ){
-                run_close_scenario(sock, token, true);
-                return;
-            }
+            // if(i > 2 ){
+            //     run_close_scenario(sock, token, true);
+            //     return;//maybe delete, wait for the server to close
+            // }
         }
     }
 }

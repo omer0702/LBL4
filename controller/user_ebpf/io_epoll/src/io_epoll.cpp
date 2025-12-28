@@ -23,6 +23,12 @@ int active_connections = 0;
 const int MAX_CONNECTIONS = 1000;
 int timer_tick_counter = 0;
 
+struct ConnectionState{
+    std::vector<uint8_t> buffer;
+    uint32_t ip;
+    uint16_t port;
+};
+
 void setup_timer(int epfd) {
     timerfd = timerfd_create(CLOCK_MONOTONIC, 0);
     if (timerfd == -1) {
@@ -49,11 +55,11 @@ void setup_timer(int epfd) {
     epoll_ctl(epfd, EPOLL_CTL_ADD, timerfd, &ev);
 }
 
-void close_client(int fd, int epfd, std::unordered_map<int, std::vector<uint8_t>>& conn_buf, int& active_connections) {
+void close_client(int fd, int epfd, std::unordered_map<int, ConnectionState>& conn_map, int& active_connections) {
     epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
     close(fd);
     active_connections--;
-    conn_buf.erase(fd);
+    conn_map.erase(fd);
     lb::session::SessionManager::instance().remove_session(fd);
 }
 
@@ -122,13 +128,13 @@ void stop_loop() {
 }
 
 void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payload, int epfd,
-                    std::unordered_map<int, std::vector<uint8_t>>& conn_buf,
+                    std::unordered_map<int, ConnectionState>& conn_map,
                     int& active_connections) {
     HandlerResult res;
-
+    auto& state = conn_map[fd];
     switch (type) {
         case MessageType::INIT_REQ:
-            res = lb::handlers::handle_init_req(fd, payload);
+            res = lb::handlers::handle_init_req(fd, payload, state.ip, state.port);
             break;
         case MessageType::KEEPALIVE_RESP:
             res = lb::handlers::handle_keepalive_resp(fd, payload);
@@ -149,7 +155,7 @@ void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payloa
 
     if(res == HandlerResult::CLOSE_CONNECTION){
         std::cout << "[EPOLL] Closing connection as per handler request: fd=" << fd << "\n";
-        close_client(fd, epfd, conn_buf, active_connections);
+        close_client(fd, epfd, conn_map, active_connections);
     }
 }
 
@@ -187,7 +193,7 @@ void run_loop(int listen_fd) {
         return;
     }
 
-    std::unordered_map<int, std::vector<uint8_t>> conn_buf;
+    std::unordered_map<int, ConnectionState> conn_map;
 
     epoll_event events[MAX_EVENTS];
 
@@ -213,7 +219,9 @@ void run_loop(int listen_fd) {
                         break;
                     }
 
-                    int client = accept(listen_fd, nullptr, nullptr);
+                    struct sockaddr_in client_addr;
+                    socklen_t client_len = sizeof(client_addr);
+                    int client = accept(listen_fd, (struct sockaddr*)&client_addr, &client_len);
                     if (client < 0) {
                         if (errno == EAGAIN || errno == EWOULDBLOCK) break;
                         perror("accept");
@@ -230,7 +238,8 @@ void run_loop(int listen_fd) {
                         close(client);
                         continue;
                     }
-                    conn_buf.emplace(client, std::vector<uint8_t>{});
+
+                    conn_map[client] = {{}, client_addr.sin_addr.s_addr, ntohs(client_addr.sin_port)};
                     std::cout << "[EPOLL] New client: fd=" << client << "\n";
                 }
             } 
@@ -240,7 +249,7 @@ void run_loop(int listen_fd) {
                 auto expired_fds = lb::session::SessionManager::instance().get_expired_sessions(20);
                 for (int e_fd : expired_fds) {//handle zombie sessions problem(keepalive fail)
                     std::cout << "[EPOLL] Session expired due to inactivity: fd=" << e_fd << "\n";
-                    close_client(e_fd, epfd, conn_buf, active_connections);
+                    close_client(e_fd, epfd, conn_map, active_connections);
                 }
 
                 timer_tick_counter++;
@@ -255,7 +264,7 @@ void run_loop(int listen_fd) {
             else {
                 if (ev_flags & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {//handle sudden disconnects problem
                     std::cout << "[EPOLL] Client disconnected: fd=" << fd << "\n";
-                    close_client(fd, epfd, conn_buf, active_connections);
+                    close_client(fd, epfd, conn_map, active_connections);
                     continue;
                 }
 
@@ -274,7 +283,7 @@ void run_loop(int listen_fd) {
                             closed = true;
                             break;
                         } else {
-                            auto &buf = conn_buf[fd];
+                            auto &buf = conn_map[fd].buffer;
                             buf.insert(buf.end(), tmp, tmp + r);
                             if(buf.size() > 1024 * 1024) {
                                 std::cerr << "[EPOLL] Connection buffer overflow, closing fd=" << fd << "\n";
@@ -285,13 +294,13 @@ void run_loop(int listen_fd) {
                     }
                     if (closed) {
                         std::cout << "[EPOLL] Client closed connection: fd=" << fd << "\n";
-                        close_client(fd, epfd, conn_buf, active_connections);
+                        close_client(fd, epfd, conn_map, active_connections);
                         continue;
                     }
 
-                    auto it = conn_buf.find(fd);
-                    if (it == conn_buf.end()) continue;
-                    auto &buffer = it->second;
+                    auto it = conn_map.find(fd);
+                    if (it == conn_map.end()) continue;
+                    auto &buffer = it->second.buffer;
 
                     while (!buffer.empty()) {
                         size_t consumed = 0;
@@ -307,7 +316,7 @@ void run_loop(int listen_fd) {
                         );
                         //std::cout << "type after decode: " << static_cast<uint16_t>(type) << "\n";
                         if (res == DecodeResult::OK) {
-                            choose_handler(fd, type, payload, epfd, conn_buf, active_connections);
+                            choose_handler(fd, type, payload, epfd, conn_map, active_connections);
 
                             if (consumed <= buffer.size()) {
                                 buffer.erase(buffer.begin(), buffer.begin() + consumed);
@@ -322,7 +331,7 @@ void run_loop(int listen_fd) {
                             std::cerr << "[EPOLL] decode error (invalid header?) on fd=" << fd << ", dropping\n";
                             epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nullptr);
                             close(fd);
-                            conn_buf.erase(fd);
+                            conn_map.erase(fd);
                             break;
                         }
                     }
@@ -331,7 +340,7 @@ void run_loop(int listen_fd) {
         }
     } 
 
-    for (auto &p : conn_buf) {
+    for (auto &p : conn_map) {
         close(p.first);
     }
     close(epfd);

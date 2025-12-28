@@ -25,13 +25,28 @@ struct ServiceMetrics{
     std::chrono::steady_clock::time_point last_report;
 };
 
-struct SessionInfo {
+struct SessionInfo {//represents a single instance(server) in service
     int fd;
     std::string service_name;
     std::string token;
+    uint32_t ip;
+    uint16_t port;
     SessionState state;
     ServiceMetrics metrics;
     std::chrono::steady_clock::time_point last_seen;//for keepalive logs
+
+    SessionInfo(int fd,
+                const std::string& name,
+                const std::string& t,
+                uint32_t ip,
+                uint16_t port)
+        : fd(fd),
+          service_name(name),
+          token(t),
+          ip(ip),
+          port(port),
+          state(SessionState::ACTIVE),
+          last_seen(std::chrono::steady_clock::now()) {}
 };
 
 
@@ -39,11 +54,12 @@ class SessionManager {
 public:
     static SessionManager& instance();
 
-    std::string create_session(int fd, const std::string& service_name);
-    std::optional<SessionInfo> get_session_by_fd(int fd);
-    std::optional<SessionInfo> get_session_by_token(const std::string& token);
+    std::string create_session(int fd, const std::string& service_name, uint32_t ip, uint16_t port);
+    SessionInfo* get_session_by_fd(int fd);
+    //std::optional<SessionInfo> get_session_by_token(const std::string& token);
     std::vector<int> get_expired_sessions(int timeout_seconds);
     std::vector<int> get_all_session_fds();
+    std::vector<int> get_instances_for_service(const std::string& service_name);
     bool has_session(int fd);
     void update_last_seen(int fd);
     void remove_session(int fd);
@@ -57,8 +73,8 @@ private:
 
     std::string generate_token();
 
-    std::unordered_map<int, SessionInfo> sessions_by_fd;
-    std::unordered_map<std::string, int> fd_by_token;
+    std::unordered_map<int, std::unique_ptr<SessionInfo>> session_mapping;//fd -> session info
+    std::unordered_map<std::string, std::vector<int>> service_groups;//service name -> list of fds
     std::mutex mtx;
 };
 

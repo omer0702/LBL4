@@ -28,7 +28,7 @@ ssize_t send_all(int fd, const std::vector<uint8_t>& bytes) {
     return send_all(fd, bytes.data(), bytes.size());
 }
 
-HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload) {
+HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload, uint32_t ip, uint16_t port) {
     lb::InitRequest req;
     if (!req.ParseFromArray(payload.data(), static_cast<int>(payload.size()))) {
         std::cerr << "[HANDLER] Failed to parse InitRequest\n";
@@ -43,11 +43,11 @@ HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload) {
         return HandlerResult::ERROR;
     }
 
-    auto session = sm.create_session(fd, req.service_name());
+    auto token = sm.create_session(fd, req.service_name(), ip, port);
 
     lb::InitResponse resp;
     resp.set_accepted(true);
-    resp.set_session_token(session);
+    resp.set_session_token(token);
     resp.set_reason("OK");
 
     auto bytes = encoder::encode_init_ack(resp);
@@ -65,7 +65,7 @@ HandlerResult handle_close_req(int fd, const std::vector<uint8_t>& payload) {
         return HandlerResult::CLOSE_CONNECTION;
     }
     std::cout<< "[HANDLER] CloseRequest received from fd: " << fd << "\n";//maybe add token(add token to service.proto at CloseRequest)
-    auto session = sm.get_session_by_fd(fd);
+    auto* session = sm.get_session_by_fd(fd);
 
     if(!sm.has_session(fd)) {
         std::cerr << "[HANDLER] no session for fd: " << fd << "\n";
