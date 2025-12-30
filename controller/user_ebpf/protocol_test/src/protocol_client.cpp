@@ -4,11 +4,13 @@
 #include <unistd.h>
 #include <vector>
 #include <thread>
+#include <dlfcn.h>
 
 #include "protocol_decoder.h"
 #include "protocol_encoder.h"
 #include "service.pb.h"
 #include "protocol_types.h"
+#include "../../../monitor/include/monitor.h"
 
 struct TestConfig {
     bool send_init = true;          
@@ -18,6 +20,35 @@ struct TestConfig {
 };
 
 TestConfig config = {true, true, false, 1}; 
+
+void send_report(int sock, const std::string& token) {
+    uint32_t cpu, mem;
+    void* handle = dlopen("libmonitor.so", RTLD_LAZY);
+    if(handle){
+        typedef lb::monitor::Monitor* (*create_fn)();
+        typedef void (*metrics_fn)(lb::monitor::Monitor*, uint32_t*, uint32_t*);
+
+        create_fn create_monitor = (create_fn)dlsym(handle, "create_monitor");
+        metrics_fn fill_metrics = (metrics_fn)dlsym(handle, "get_metrics");
+
+        static auto* monitor_obj = create_monitor();
+        fill_metrics(monitor_obj, &cpu, &mem);
+        dlclose(handle);
+    } else {
+        cpu = 10;
+        mem = 100;
+    }
+
+    lb::ServiceReport report;
+    report.set_session_token(token);
+    report.set_memory_usage(mem);
+    report.set_cpu_usage(cpu);
+    report.set_active_requests(5);
+
+    auto bytes = lb::protocol::encoder::encode_report(report);
+    send(sock, bytes.data(), bytes.size(), 0);
+    std::cout << "[CLIENT] Sent ServiceReport\n";
+}
 
 void run_close_scenario(int sock, const std::string& token, bool use_correct_token) {
     lb::CloseRequest req;
@@ -72,16 +103,7 @@ void handle_server_messages(int sock, std::string& token) {
             } 
             else if (type == lb::protocol::MessageType::GET_REPORTS_REQ) {
                 if (config.respond_keepalive) {
-                    std::cout << "[CLIENT] Got GetReportRequest\n";
-                    lb::ServiceReport report;
-                    report.set_session_token(token);
-                    report.set_cpu_usage(30.5);
-                    report.set_memory_usage(400);
-                    report.set_active_requests(12);
-                    
-                    auto bytes = lb::protocol::encoder::encode_report(report);
-                    send(sock, bytes.data(), bytes.size(), 0);
-                    std::cout << "[CLIENT] Sent ServiceReport\n";
+                    send_report(sock, token);
                 }
             }
             else if(type == lb::protocol::MessageType::CLOSE_ACK){
