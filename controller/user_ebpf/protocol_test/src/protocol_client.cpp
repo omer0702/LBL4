@@ -33,7 +33,7 @@ void send_report(int sock, const std::string& token) {
 
         static auto* monitor_obj = create_monitor();
         fill_metrics(monitor_obj, &cpu, &mem);
-        dlclose(handle);
+        //dlclose(handle);
     } else {
         cpu = 10;
         mem = 100;

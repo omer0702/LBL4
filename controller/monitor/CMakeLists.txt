@@ -9,3 +9,7 @@ set_target_properties(monitor PROPERTIES
     OUTPUT_NAME "monitor"
 )
 
+find_package(Threads REQUIRED)
+target_link_libraries(monitor PRIVATE
+    Threads::Threads
+)

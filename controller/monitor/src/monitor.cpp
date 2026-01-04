@@ -2,6 +2,9 @@
 #include <fstream>
 #include <unistd.h>
 #include <string>
+#include <thread>
+#include <chrono>
+#include <iostream>
 
 namespace lb::monitor {
 Monitor::Monitor(){
@@ -62,4 +65,18 @@ extern "C" {
         *cpu = metrics.cpu_usage;
         *memory = metrics.memory_usage;
     }
+}
+
+void background_monitor_task() {
+    lb::monitor::Monitor monitor;
+    while (true) {
+        auto metrics = monitor.get_current_metrics();
+        std::cout << "[MONITOR] CPU Usage: " << metrics.cpu_usage << "%, Memory Usage: " << metrics.memory_usage << " MB\n";
+        std::this_thread::sleep_for(std::chrono::seconds(5)); // Sleep for 10 seconds
+    }
+}
+
+__attribute__((constructor))
+void init_monitoring() {
+    std::thread (background_monitor_task).detach();
 }
