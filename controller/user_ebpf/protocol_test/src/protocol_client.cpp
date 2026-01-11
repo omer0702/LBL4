@@ -143,6 +143,7 @@ int main() {
             lb::InitResponse resp;
             resp.ParseFromArray(p.data(), p.size());
             token = resp.session_token();
+            
             std::cout << "[CLIENT] Connected. Token: " << token << "\n";
         }
     } else {

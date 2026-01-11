@@ -3,6 +3,8 @@
 #include <bpf/bpf_endian.h>
 #include "../common/maps.h"
 
+#define ETH_P_IP 0x0800
+
 static __always_inline __u32 calculate_hash(struct xdp_md *ctx){
     void* data = (void*)(long)ctx->data;
     void* data_end = (void*)(long)ctx->data_end;
@@ -11,9 +13,9 @@ static __always_inline __u32 calculate_hash(struct xdp_md *ctx){
     if((void*)(eth + 1) > data_end) {
         return 0;
     }
-    // if(eth->h_proto != bpf_htons(ETH_P_IP)){
-    //     return 0;
-    // }
+    if(eth->h_proto != bpf_htons(ETH_P_IP)){
+        return 0;
+    }
     struct iphdr *ip = (void*)(eth + 1);
     if((void*)(ip + 1) > data_end) {
         return 0;
@@ -32,9 +34,9 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
     if ((void*)(eth + 1) > data_end) {
         return XDP_PASS;
     }
-    // if(eth->h_proto != bpf_htons(ETH_P_IP)){
-    //     return XDP_PASS;
-    // }
+    if(eth->h_proto != bpf_htons(ETH_P_IP)){
+        return XDP_PASS;
+    }
 
     //parsing ipv4
     struct iphdr *ip = (struct iphdr *)(eth + 1);

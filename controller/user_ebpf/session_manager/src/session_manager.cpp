@@ -1,7 +1,7 @@
 #include "session_manager.h"
 #include <random>
 #include <iomanip>
-
+// #include "../../../model/routing_logic/include/scorer.h"
 namespace lb::session {
 
 SessionManager& SessionManager::instance() {
@@ -146,6 +146,12 @@ void SessionManager::print_session_stats(){
                   << (session->state == SessionState::ACTIVE ? ", State: ACTIVE" : ", State: SUSPECTED")
                   <<"\n";
     }
+
+    // std::vector<BackendScore> scores = lb::routing::Scorer::score_service_instances("serviceA");
+    // std::cout << "----- Backend Scores for serviceA -----\n";
+    // for(const auto& score : scores){
+    //     std::cout << "FD: " << score.backend_id << ", Score: " << score.score << "\n";
+    // }
 }
 
 }

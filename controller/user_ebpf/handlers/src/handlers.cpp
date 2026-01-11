@@ -3,6 +3,9 @@
 #include <iostream>
 #include "service.pb.h"
 #include <sys/socket.h>
+#include "../../../model/routing_logic/include/scorer.h"
+#include "../../../model/routing_logic/include/maglev_builder.h"
+
 
 using namespace lb::protocol;
 
@@ -121,6 +124,15 @@ HandlerResult handle_get_report_resp(int fd, const std::vector<uint8_t>& payload
     }
 
     sm.update_metrics(fd, report);
+    std::vector<BackendScore> scores = lb::routing::Scorer::score_service_instances("serviceA");
+    std::cout << "----- Backend Scores for serviceA -----\n";
+    for(const auto& score : scores){
+        std::cout << "FD: " << score.backend_id << ", Score: " << score.score << "\n";
+    }
+    MaglevBuilder builder(scores);
+    std::vector<uint32_t> table = builder.build_table();
+    builder.test_maglev_builder(table, scores);
+
     //sm.print_session_stats();
     lb::GetReportAck resp;
     resp.set_ok(true);

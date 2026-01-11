@@ -143,7 +143,7 @@ void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payloa
             //std::cout << "here1\n";
             res = lb::handlers::handle_get_report_resp(fd, payload);
             lb::session::SessionManager::instance().print_session_stats();
-            //std::cout << "here3\n";
+
             break;
         case MessageType::CLOSE_REQ:
             res = lb::handlers::handle_close_req(fd, payload);
@@ -329,9 +329,7 @@ void run_loop(int listen_fd) {
                             break;
                         } else {
                             std::cerr << "[EPOLL] decode error (invalid header?) on fd=" << fd << ", dropping\n";
-                            epoll_ctl(epfd, EPOLL_CTL_DEL, fd, nullptr);
-                            close(fd);
-                            conn_map.erase(fd);
+                            close_client(fd, epfd, conn_map, active_connections);
                             break;
                         }
                     }

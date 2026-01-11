@@ -67,16 +67,17 @@ extern "C" {
     }
 }
 
-void background_monitor_task() {
-    lb::monitor::Monitor monitor;
-    while (true) {
-        auto metrics = monitor.get_current_metrics();
-        std::cout << "[MONITOR] CPU Usage: " << metrics.cpu_usage << "%, Memory Usage: " << metrics.memory_usage << " MB\n";
-        std::this_thread::sleep_for(std::chrono::seconds(5)); // Sleep for 10 seconds
-    }
-}
+// void background_monitor_task() {
+//     lb::monitor::Monitor monitor;
 
-__attribute__((constructor))
-void init_monitoring() {
-    std::thread (background_monitor_task).detach();
-}
+//     while (true) {
+//         auto metrics = monitor.get_current_metrics();
+//         std::cout << "[MONITOR] CPU Usage: " << metrics.cpu_usage << "%, Memory Usage: " << metrics.memory_usage << " MB\n";
+//         std::this_thread::sleep_for(std::chrono::seconds(5));
+//     }
+// }
+
+// __attribute__((constructor))
+// void init_monitoring() {
+//     std::thread (background_monitor_task).detach();
+// }
