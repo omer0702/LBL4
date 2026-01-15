@@ -21,4 +21,6 @@ target_link_libraries(lb_app
     session_manager
     handlers
     routing_logic
+    ebpf_loader
+    bpf
 )
