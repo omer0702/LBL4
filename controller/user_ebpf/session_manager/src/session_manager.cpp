@@ -154,4 +154,30 @@ void SessionManager::print_session_stats(){
     // }
 }
 
+
+void SessionManager::register_service_vip(const std::string& service_name, uint32_t vip){
+    std::lock_guard<std::mutex> lock(mtx);
+    service_vips[service_name] = vip;
+}
+
+uint32_t SessionManager::get_service_vip(const std::string& service_name){
+    std::lock_guard<std::mutex> lock(mtx);
+    auto it = service_vips.find(service_name);
+    if(it != service_vips.end()){
+        return it->second;
+    }
+
+    return 0;
+}
+
+std::vector<uint32_t> SessionManager::get_all_service_vips(){
+    std::lock_guard<std::mutex> lock(mtx);
+    std::vector<uint32_t> vips;
+    for(const auto& [name, vip] : service_vips){
+        vips.push_back(vip);
+    }
+
+    return vips;
+}
+
 }

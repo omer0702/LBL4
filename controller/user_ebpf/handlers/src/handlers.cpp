@@ -31,7 +31,7 @@ ssize_t send_all(int fd, const std::vector<uint8_t>& bytes) {
     return send_all(fd, bytes.data(), bytes.size());
 }
 
-HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload, uint32_t ip, uint16_t port) {
+HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload, uint32_t ip, uint16_t port, MapsManager& maps_manager) {
     lb::InitRequest req;
     if (!req.ParseFromArray(payload.data(), static_cast<int>(payload.size()))) {
         std::cerr << "[HANDLER] Failed to parse InitRequest\n";
@@ -46,8 +46,22 @@ HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload, uint3
         return HandlerResult::ERROR;
     }
 
+    uint32_t vip;
+    auto existing_vip = sm.get_service_vip(req.service_name());
+    if(existing_vip) {
+        vip = existing_vip;
+    }
+    else{
+        vip = 0x6400000A;
+        sm.register_service_vip(req.service_name(), vip);
+        std::cout << "[HANDLER] assigned VIP to service" << req.service_name() << "\n";
+    }
+
+
     auto token = sm.create_session(fd, req.service_name(), ip, port);
 
+    //maps_manager.add_backend(fd, ip, port);
+    
     lb::InitResponse resp;
     resp.set_accepted(true);
     resp.set_session_token(token);

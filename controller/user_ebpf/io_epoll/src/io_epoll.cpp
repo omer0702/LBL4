@@ -129,12 +129,12 @@ void stop_loop() {
 
 void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payload, int epfd,
                     std::unordered_map<int, ConnectionState>& conn_map,
-                    int& active_connections) {
+                    int& active_connections, MapsManager& maps_manager) {
     HandlerResult res;
     auto& state = conn_map[fd];
     switch (type) {
         case MessageType::INIT_REQ:
-            res = lb::handlers::handle_init_req(fd, payload, state.ip, state.port);
+            res = lb::handlers::handle_init_req(fd, payload, state.ip, state.port, maps_manager);
             break;
         case MessageType::KEEPALIVE_RESP:
             res = lb::handlers::handle_keepalive_resp(fd, payload);
@@ -177,7 +177,7 @@ void send_get_reports_request(int fd) {
 }
 
 
-void run_loop(int listen_fd) {
+void run_loop(int listen_fd, MapsManager& maps_manager) {
     const int MAX_EVENTS = 64;
     int epfd = epoll_create1(0);
     if (epfd < 0) { perror("epoll_create1"); return; }
@@ -316,7 +316,7 @@ void run_loop(int listen_fd) {
                         );
                         //std::cout << "type after decode: " << static_cast<uint16_t>(type) << "\n";
                         if (res == DecodeResult::OK) {
-                            choose_handler(fd, type, payload, epfd, conn_map, active_connections);
+                            choose_handler(fd, type, payload, epfd, conn_map, active_connections, maps_manager);
 
                             if (consumed <= buffer.size()) {
                                 buffer.erase(buffer.begin(), buffer.begin() + consumed);

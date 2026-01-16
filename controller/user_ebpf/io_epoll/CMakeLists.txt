@@ -9,4 +9,8 @@ target_include_directories(io_epoll PUBLIC
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/protocol/include
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/handlers/include
     ${CMAKE_SOURCE_DIR}/build/debug/controller/proto
+    ${CMAKE_SOURCE_DIR}/controller/user_ebpf/maps_manager/include
+    ${CMAKE_SOURCE_DIR}/controller/user_ebpf/ebpf_loader
+    ${CMAKE_SOURCE_DIR}/model/routing_logic/include
+
 )

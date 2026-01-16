@@ -66,6 +66,10 @@ public:
     void update_metrics(int fd, const lb::ServiceReport& report);
     void print_session_stats();
 
+    void register_service_vip(const std::string& service_name, uint32_t vip);
+    uint32_t get_service_vip(const std::string& service_name);
+    std::vector<uint32_t> get_all_service_vips();
+
 private:
     SessionManager() = default;
     SessionManager(const SessionManager&) = delete;
@@ -75,6 +79,7 @@ private:
 
     std::unordered_map<int, std::unique_ptr<SessionInfo>> session_mapping;//fd -> session info
     std::unordered_map<std::string, std::vector<int>> service_groups;//service name -> list of fds
+    std::unordered_map<std::string, uint32_t> service_vips;//service name -> vip
     std::mutex mtx;
 };
 

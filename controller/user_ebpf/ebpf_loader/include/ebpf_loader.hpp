@@ -13,7 +13,10 @@ public:
     bool attachProgram(const std::string& interface_name);
     void detachProgram();
 
-    struct balancer_bpf* get_skel() const;
+    struct balancer_bpf* get_skel() const {
+        return skel;
+    }
+    
 private:
     struct balancer_bpf* skel;
     int index;//network interface index
