@@ -6,6 +6,7 @@
 #include <iomanip>
 
 
+
 MaglevBuilder::MaglevBuilder(const std::vector<BackendScore>& backends)
     : backends(backends) {}
 
@@ -44,7 +45,7 @@ std::vector<uint32_t> MaglevBuilder::build_table() {
         counters[i] = std::max(1, (int)((backends[i].score / max_score) * 100));
     }
     
-    std::vector<uint32_t> table(M, 0xffffffff);
+    std::vector<uint32_t> table(M, EMPTY);
     std::vector<uint32_t> next(N, 0);
     uint32_t filled = 0;
 
@@ -53,7 +54,7 @@ std::vector<uint32_t> MaglevBuilder::build_table() {
             for (int c = 0; c < counters[i] && filled < M; ++c) {
                 uint32_t pos = perm[i][next[i]];
 
-                while (table[pos] != 0xffffffff) {
+                while (table[pos] != EMPTY) {
                     next[i]++;
                     pos = perm[i][next[i]];
                 }

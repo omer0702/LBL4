@@ -14,7 +14,7 @@ enum class HandlerResult {
 };
 
 namespace lb::handlers {
-HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload, uint32_t ip, uint16_t port, MapsManager& maps_manager);
+HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload, uint32_t ip, uint16_t port, uint8_t* mac, MapsManager& maps_manager);
 HandlerResult handle_close_req(int fd, const std::vector<uint8_t>& payload);
 HandlerResult handle_keepalive_resp(int fd, const std::vector<uint8_t>& payload);
 HandlerResult handle_get_report_resp(int fd, const std::vector<uint8_t>& payload);

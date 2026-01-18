@@ -10,6 +10,11 @@
 #include <map>
 #include <sys/timerfd.h>
 
+#include <netinet/if_ether.h>
+#include <net/if_arp.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+
 #include "protocol_decoder.h"
 #include "protocol_encoder.h"
 #include "session_manager.h"
@@ -23,11 +28,7 @@ int active_connections = 0;
 const int MAX_CONNECTIONS = 1000;
 int timer_tick_counter = 0;
 
-struct ConnectionState{
-    std::vector<uint8_t> buffer;
-    uint32_t ip;
-    uint16_t port;
-};
+
 
 void setup_timer(int epfd) {
     timerfd = timerfd_create(CLOCK_MONOTONIC, 0);
@@ -55,7 +56,29 @@ void setup_timer(int epfd) {
     epoll_ctl(epfd, EPOLL_CTL_ADD, timerfd, &ev);
 }
 
-void close_client(int fd, int epfd, std::unordered_map<int, ConnectionState>& conn_map, int& active_connections) {
+bool get_mac_address(uint32_t ip, uint8_t* mac) {//from arp table
+    struct arpreq req;
+    struct sockaddr_in* sin;
+    int sock_fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+    memset(&req, 0, sizeof(req));
+    sin = (struct sockaddr_in*)&req.arp_pa;
+    sin->sin_family = AF_INET;
+    sin->sin_addr.s_addr = ip;
+
+    strncpy(req.arp_dev, "lo", IF_NAMESIZE);//change eth0
+    if (ioctl(sock_fd, SIOCGARP, &req) == -1) {
+        close(sock_fd);
+        return false;
+    }
+
+    memcpy(mac, req.arp_ha.sa_data, 6);
+    close(sock_fd);
+    return true;
+}
+
+void close_client(int fd, int epfd, std::unordered_map<int, ConnectionState>& conn_map, int& active_connections, MapsManager& maps_manager) {
+    maps_manager.update_backend_status(fd, false);
     epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
     close(fd);
     active_connections--;
@@ -134,7 +157,7 @@ void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payloa
     auto& state = conn_map[fd];
     switch (type) {
         case MessageType::INIT_REQ:
-            res = lb::handlers::handle_init_req(fd, payload, state.ip, state.port, maps_manager);
+            res = lb::handlers::handle_init_req(fd, payload, state.ip, state.port, state.mac, maps_manager);
             break;
         case MessageType::KEEPALIVE_RESP:
             res = lb::handlers::handle_keepalive_resp(fd, payload);
@@ -155,7 +178,7 @@ void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payloa
 
     if(res == HandlerResult::CLOSE_CONNECTION){
         std::cout << "[EPOLL] Closing connection as per handler request: fd=" << fd << "\n";
-        close_client(fd, epfd, conn_map, active_connections);
+        close_client(fd, epfd, conn_map, active_connections, maps_manager);
     }
 }
 
@@ -239,8 +262,10 @@ void run_loop(int listen_fd, MapsManager& maps_manager) {
                         continue;
                     }
 
-                    conn_map[client] = {{}, client_addr.sin_addr.s_addr, ntohs(client_addr.sin_port)};
-                    std::cout << "[EPOLL] New client: fd=" << client << "\n";
+                    uint8_t* mac;
+                    get_mac_address(client_addr.sin_addr.s_addr, mac);
+                    conn_map[client] = {{}, client_addr.sin_addr.s_addr, ntohs(client_addr.sin_port), mac};
+                    std::cout << "[EPOLL] New client: fd=" << client << "IP and MAC:" << client_addr.sin_addr.s_addr << "|" << mac << "\n";
                 }
             } 
             else if(fd == timerfd){
@@ -249,7 +274,7 @@ void run_loop(int listen_fd, MapsManager& maps_manager) {
                 auto expired_fds = lb::session::SessionManager::instance().get_expired_sessions(20);
                 for (int e_fd : expired_fds) {//handle zombie sessions problem(keepalive fail)
                     std::cout << "[EPOLL] Session expired due to inactivity: fd=" << e_fd << "\n";
-                    close_client(e_fd, epfd, conn_map, active_connections);
+                    close_client(e_fd, epfd, conn_map, active_connections, maps_manager);
                 }
 
                 timer_tick_counter++;
@@ -264,7 +289,7 @@ void run_loop(int listen_fd, MapsManager& maps_manager) {
             else {
                 if (ev_flags & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {//handle sudden disconnects problem
                     std::cout << "[EPOLL] Client disconnected: fd=" << fd << "\n";
-                    close_client(fd, epfd, conn_map, active_connections);
+                    close_client(fd, epfd, conn_map, active_connections, maps_manager);
                     continue;
                 }
 
@@ -294,7 +319,7 @@ void run_loop(int listen_fd, MapsManager& maps_manager) {
                     }
                     if (closed) {
                         std::cout << "[EPOLL] Client closed connection: fd=" << fd << "\n";
-                        close_client(fd, epfd, conn_map, active_connections);
+                        close_client(fd, epfd, conn_map, active_connections, maps_manager);
                         continue;
                     }
 
@@ -329,7 +354,7 @@ void run_loop(int listen_fd, MapsManager& maps_manager) {
                             break;
                         } else {
                             std::cerr << "[EPOLL] decode error (invalid header?) on fd=" << fd << ", dropping\n";
-                            close_client(fd, epfd, conn_map, active_connections);
+                            close_client(fd, epfd, conn_map, active_connections, maps_manager);
                             break;
                         }
                     }

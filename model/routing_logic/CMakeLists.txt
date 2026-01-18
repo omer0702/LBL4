@@ -6,4 +6,5 @@ add_library(routing_logic
 target_include_directories(routing_logic PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/model/routing_logic/include
+    ${CMAKE_SOURCE_DIR}/controller/user_ebpf/session_manager/include
 )

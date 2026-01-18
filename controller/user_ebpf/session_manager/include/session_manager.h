@@ -68,7 +68,7 @@ public:
 
     void register_service_vip(const std::string& service_name, uint32_t vip);
     uint32_t get_service_vip(const std::string& service_name);
-    std::vector<uint32_t> get_all_service_vips();
+    std::unordered_map<std::string, uint32_t> get_all_service_vips();
 
 private:
     SessionManager() = default;

@@ -34,11 +34,12 @@ bool MapsManager::update_service_map(uint32_t service_ip, const std::vector<uint
     return true;
 }
 
-bool MapsManager::add_backend(uint32_t backend_id, uint32_t ip, uint16_t port) {
+bool MapsManager::add_backend(int backend_id, uint32_t ip, uint16_t port, uint8_t* mac) {
     backend_info info{};
     info.ip = ip;
     info.port = port;
     info.is_active = 1;
+    memcpy(info.mac, mac, 6);
 
     int fd = bpf_map__fd(skel->maps.backends_map);
     int error = bpf_map_update_elem(fd, &backend_id, &info, BPF_ANY);

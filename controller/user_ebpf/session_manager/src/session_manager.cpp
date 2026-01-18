@@ -170,14 +170,10 @@ uint32_t SessionManager::get_service_vip(const std::string& service_name){
     return 0;
 }
 
-std::vector<uint32_t> SessionManager::get_all_service_vips(){
+std::unordered_map<std::string, uint32_t> SessionManager::get_all_service_vips(){
     std::lock_guard<std::mutex> lock(mtx);
-    std::vector<uint32_t> vips;
-    for(const auto& [name, vip] : service_vips){
-        vips.push_back(vip);
-    }
-
-    return vips;
+    return service_vips;
 }
+
 
 }
