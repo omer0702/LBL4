@@ -4,6 +4,8 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <signal.h>
+#include <atomic>
 
 
 #include "ebpf_loader.hpp"
@@ -15,7 +17,16 @@
 #define PORT 8080
 using namespace lb;
 
+std::atomic<bool> keep_running(true);
+
+void signal_handler(int signum) {
+    keep_running = false;
+    std::cout << "[MAIN] Caught signal " << signum << ", shutting down..." << std::endl;
+}
+
 int main() {  
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
     EbpfLoader ebpf_loader;
     if(!ebpf_loader.loadProgram()){
         std::cerr << "[MAIN] failed to load eBPF program\n";
@@ -31,23 +42,25 @@ int main() {
     auto& sm = lb::session::SessionManager::instance();
 
     std::thread maglev_thread([&](){
+        while(keep_running){
         std::cout << "[MAIN] Maglev update thread started\n";
-        while(true){
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            std::unordered_map<std::string, uint32_t> services = sm.get_all_service_vips();
+            while(true){
+                std::this_thread::sleep_for(std::chrono::seconds(5));
+                std::unordered_map<std::string, uint32_t> services = sm.get_all_service_vips();
 
-            for(const auto& [name, vip] : services){
-                std::vector<BackendScore> backend_scores = lb::routing::Scorer::score_service_instances(name);
-                if(backend_scores.empty()){
-                    std::cout << "[MAIN] no backends for service: " << name << "\n";
-                    continue;
+                for(const auto& [name, vip] : services){
+                    std::vector<BackendScore> backend_scores = lb::routing::Scorer::score_service_instances(name);
+                    if(backend_scores.empty()){
+                        std::cout << "[MAIN] no backends for service: " << name << "\n";
+                        continue;
+                    }
+
+                    MaglevBuilder builder(backend_scores);
+                    std::vector<uint32_t> table = builder.build_table();
+                    maps_manager.update_service_map(vip, table);
+                    
+                    std::cout << "[MAIN] updated maglev table for service: " << name << "\n";
                 }
-
-                MaglevBuilder builder(backend_scores);
-                std::vector<uint32_t> table = builder.build_table();
-                maps_manager.update_service_map(vip, table);
-                
-                std::cout << "[MAIN] updated maglev table for service: " << name << "\n";
             }
         }
     });
@@ -59,6 +72,6 @@ int main() {
     if (listen_fd < 0) return 1;
     std::cout << "[MAIN] Listening on port " << PORT << "\n";
 
-    lb::io_epoll::run_loop(listen_fd, maps_manager);
+    lb::io_epoll::run_loop(listen_fd, maps_manager, keep_running);
     return 0;
 }

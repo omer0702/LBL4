@@ -9,6 +9,7 @@
 #include <cstring>
 #include <map>
 #include <sys/timerfd.h>
+#include <atomic>
 
 #include <netinet/if_ether.h>
 #include <net/if_arp.h>
@@ -200,7 +201,7 @@ void send_get_reports_request(int fd) {
 }
 
 
-void run_loop(int listen_fd, MapsManager& maps_manager) {
+void run_loop(int listen_fd, MapsManager& maps_manager, std::atomic<bool>& external_running) {
     const int MAX_EVENTS = 64;
     int epfd = epoll_create1(0);
     if (epfd < 0) { perror("epoll_create1"); return; }
@@ -222,7 +223,7 @@ void run_loop(int listen_fd, MapsManager& maps_manager) {
 
     std::cout << "[EPOLL] Listening...\n";
 
-    while (running) {
+    while (external_running && running) {
         int n = epoll_wait(epfd, events, MAX_EVENTS, -1);
         if (n < 0) {
             if (errno == EINTR) continue;
@@ -265,7 +266,7 @@ void run_loop(int listen_fd, MapsManager& maps_manager) {
                     uint8_t* mac;
                     get_mac_address(client_addr.sin_addr.s_addr, mac);
                     conn_map[client] = {{}, client_addr.sin_addr.s_addr, ntohs(client_addr.sin_port), mac};
-                    std::cout << "[EPOLL] New client: fd=" << client << "IP and MAC:" << client_addr.sin_addr.s_addr << "|" << mac << "\n";
+                    std::cout << "[EPOLL] New client: fd=" << client << ", IP and MAC:" << client_addr.sin_addr.s_addr << "|" << mac << "\n";
                 }
             } 
             else if(fd == timerfd){

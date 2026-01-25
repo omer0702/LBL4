@@ -87,6 +87,20 @@ int main(int argc, char** argv) {
     udp_thread.detach();
 
     int sock = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in local_addr = {};
+    local_addr.sin_family = AF_INET;
+    local_addr.sin_port = 0;
+    if(inet_pton(AF_INET, my_ip.c_str(), &local_addr.sin_addr) <= 0){
+        std::cerr << "Invlaid local ip address\n";
+        return 1;
+    }
+
+    if(bind(sock, (sockaddr*)&local_addr, sizeof(local_addr)) < 0){
+        perror("bind TCP sokcet failed");
+        close(sock);
+        return 1;
+    }
+
     sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(8080);
@@ -94,6 +108,7 @@ int main(int argc, char** argv) {
 
     if (connect(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
         std::cerr << "Could not connect to Controller\n";
+        close(sock);
         return 1;
     }
 

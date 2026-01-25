@@ -1,7 +1,7 @@
-#include "../core/vmlinux.h"
+#include "../../core/vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
-#include "../common/maps.h"
+#include "../../common/maps.h"
 
 #define ETH_P_IP 0x0800
 
@@ -40,6 +40,7 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
     if ((void*)(eth + 1) > data_end) {
         return XDP_PASS;
     }
+
     if(eth->h_proto != bpf_htons(ETH_P_IP)){
         return XDP_PASS;
     }
@@ -55,8 +56,17 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
         return XDP_PASS;
     }
 
+
+    struct udphdr *udp;
+    udp = data + sizeof(struct ethhdr) + sizeof(struct iphdr);
+    if((void *)(udp + 1) > data_end){
+        return XDP_PASS;
+    }
+
     //lookup service
     __u32 service_ip = ip->daddr;
+    bpf_printk("XDP: UDP packet detected: dest_ip-raw_hex=0x%x, decimal=%u", service_ip, service_ip);
+
     void* inner_map = bpf_map_lookup_elem(&services_map, &service_ip);
     if(!inner_map){
         return XDP_PASS;
@@ -82,9 +92,12 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
     __u32 new_ip = backend->ip;
     ip->daddr = backend->ip;
 
-    for(int i = 0; i < 6; i++){
-        eth->h_dest[i] = backend->mac[i];
-    }
+    udp->check = 0;
+    
+
+    // for(int i = 0; i < 6; i++){
+    //     eth->h_dest[i] = backend->mac[i];
+    // }
 
     update_checksum(&ip->check, old_ip, new_ip, &ip->check);
 

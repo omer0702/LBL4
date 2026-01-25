@@ -6,7 +6,8 @@
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/controller/user_ebpf/protocol/include",
                 "${workspaceFolder}/build/debug/controller/proto",
-                "${workspaceFolder}/controller/user_ebpf/session_manager/include"
+                "${workspaceFolder}/controller/user_ebpf/session_manager/include",
+                "${workspaceFolder}"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/g++",

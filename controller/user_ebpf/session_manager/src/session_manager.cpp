@@ -62,7 +62,7 @@ std::vector<int> SessionManager::get_expired_sessions(int timeout_seconds){
 
     for(const auto& [fd, session] : session_mapping){
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - session->last_seen).count();
-        std::cout << duration << " seconds since last seen for fd=" << fd << "\n";
+        //std::cout << duration << " seconds since last seen for fd=" << fd << "\n";
         if(duration > timeout_seconds){
             expired_fds.push_back(fd);
         }

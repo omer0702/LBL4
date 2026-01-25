@@ -54,7 +54,7 @@ HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload, uint3
     else{
         vip = 0x6400000A;//10.0.0.100
         sm.register_service_vip(req.service_name(), vip);
-        std::cout << "[HANDLER] assigned VIP to service" << req.service_name() << "\n";
+        std::cout << "[HANDLER] assigned VIP " << vip << " to service: " << req.service_name() << "\n";
     }
 
 
@@ -118,7 +118,7 @@ HandlerResult handle_keepalive_resp(int fd, const std::vector<uint8_t>& payload)
     }
 
     sm.update_last_seen(fd);
-    std::cout << "[HANDLER] KeepaliveResponse received, updated last seen: fd=" << fd << "\n";
+    //std::cout << "[HANDLER] KeepaliveResponse received, updated last seen: fd=" << fd << "\n";
 
     return HandlerResult::OK;
 }
@@ -138,14 +138,14 @@ HandlerResult handle_get_report_resp(int fd, const std::vector<uint8_t>& payload
     }
 
     sm.update_metrics(fd, report);
-    std::vector<BackendScore> scores = lb::routing::Scorer::score_service_instances("serviceA");
-    std::cout << "----- Backend Scores for serviceA -----\n";
-    for(const auto& score : scores){
-        std::cout << "FD: " << score.backend_id << ", Score: " << score.score << "\n";
-    }
-    MaglevBuilder builder(scores);
-    std::vector<uint32_t> table = builder.build_table();
-    builder.test_maglev_builder(table, scores);
+    // std::vector<BackendScore> scores = lb::routing::Scorer::score_service_instances("serviceA");
+    // std::cout << "----- Backend Scores for serviceA -----\n";
+    // for(const auto& score : scores){
+    //     std::cout << "FD: " << score.backend_id << ", Score: " << score.score << "\n";
+    // }
+    // MaglevBuilder builder(scores);
+    // std::vector<uint32_t> table = builder.build_table();
+    // builder.test_maglev_builder(table, scores);
 
     //sm.print_session_stats();
     lb::GetReportAck resp;

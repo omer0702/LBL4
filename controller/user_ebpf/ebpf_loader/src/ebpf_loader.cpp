@@ -3,11 +3,13 @@
 #include <net/if.h>
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
+#include <linux/if_link.h>
 
 EbpfLoader::EbpfLoader(): skel(nullptr), index(-1), is_attached(false) {
 }
 
 EbpfLoader::~EbpfLoader() {
+    std::cout << "[LOADER]in EbpfLoader destructor" << std::endl;
     detachProgram();
     if (skel) {
         balancer_bpf__destroy(skel);
@@ -42,9 +44,12 @@ bool EbpfLoader::attachProgram(const std::string& name){
         return false;
     }
 
-    skel->links.xdp_balancer_prog = bpf_program__attach_xdp(skel->progs.xdp_balancer_prog, index);
-    if(!skel->links.xdp_balancer_prog){
-        std::cerr << "[LOADER]Failed to attach XDP program to interface: " << name << std::endl;
+    int prog_fd = bpf_program__fd(skel->progs.xdp_balancer_prog);
+    
+    int error = bpf_xdp_attach(index, prog_fd, XDP_FLAGS_SKB_MODE, NULL);
+
+    if(error < 0){
+        std::cerr << "[LOADER]Failed to attach XDP program: " << strerror(-error) << std::endl;
         return false;
     }
 
@@ -54,10 +59,19 @@ bool EbpfLoader::attachProgram(const std::string& name){
 }
 
 void EbpfLoader::detachProgram(){
+    std::cout << "[LOADER] in detachProgram" << std::endl;
     if(is_attached && skel){
+        int error = bpf_xdp_attach(index, -1, XDP_FLAGS_SKB_MODE, NULL);
+        if(error < 0){
+            std::cerr << "[LOADER] failed to detach XDP program:" << strerror(-error) << std::endl;
+        }
+        else{
+            std::cout << "[LOADER] succesfully detached XDP program" << std::endl;
+        }
+
         bpf_link__destroy(skel->links.xdp_balancer_prog);
         skel->links.xdp_balancer_prog = nullptr;
+        
         is_attached = false;
-        std::cout << "[LOADER]Detached XDP program" << std::endl;
     }
 }
