@@ -11,6 +11,8 @@ fi
 echo "adding VIP 10.0.0.100"
 sudo ip addr add 10.0.0.100/32 dev lo 2>/dev/null
 
+
+
 for i in {2..7}
 do
     IP="127.0.0.$i"

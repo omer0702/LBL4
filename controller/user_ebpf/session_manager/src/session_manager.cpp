@@ -175,5 +175,11 @@ std::unordered_map<std::string, uint32_t> SessionManager::get_all_service_vips()
     return service_vips;
 }
 
+uint32_t SessionManager::allocate_service_vip(){
+    if(next_vip_suffix >= start_suffix + max_services){
+        return 0;
+    }
 
+    return next_vip_suffix.fetch_add(1);
+}
 }

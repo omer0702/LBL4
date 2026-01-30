@@ -37,8 +37,8 @@ void start_udp_receiver(uint16_t port, const std::string& ip_addr) {
         socklen_t addr_len = sizeof(client_addr);
         int n = recvfrom(sock, buffer, sizeof(buffer), 0, (sockaddr*)&client_addr, &addr_len);
         if (n > 0) {
-            std::cout << "\n[UDP] >>> SUCCESS! Packet received at Backend (" << ip_addr << ") <<<\n";
-            std::cout << "[UDP] Content: " << std::string(buffer, n) << "\n";
+            std::cout << "\n[UDP] >>> SUCCESS! Packet received at Backend (" << ip_addr << ") <<<" << std::endl;
+            std::cout << "[UDP] Content: " << std::string(buffer, n) << std::endl;
         }
     }
 }

@@ -5,10 +5,22 @@
 
 #define ETH_P_IP 0x0800
 
-static __always_inline void update_checksum(void* data_start, int old_value, int new_value, __u16* csum){
+static __always_inline void update_checksum2(void* data_start, int old_value, int new_value, __u16* csum){
     __u32 new_csum = *csum + old_value - new_value;
     new_csum = (new_csum & 0xFFFF) + (new_csum >> 16);
     *csum = (__u16)new_csum;
+}
+
+static __always_inline void update_checksum(__u16* csum, __u32 old_ip, __u32 new_ip){
+    __u32 sum = *csum;
+    sum = ~sum & 0xFFFF;
+    sum+= (~(old_ip >> 16) & 0xFFFF) + (~(old_ip & 0xFFFF) & 0xFFFF);
+    sum+= (new_ip >> 16) + (new_ip & 0xFFFF);
+
+    sum = (sum >> 16) + (sum & 0xFFFF);
+    sum = (sum >> 16) + (sum & 0xFFFF);
+
+    *csum = ~sum & 0xFFFF;
 }
 
 static __always_inline __u32 calculate_hash(struct xdp_md *ctx){
@@ -28,6 +40,10 @@ static __always_inline __u32 calculate_hash(struct xdp_md *ctx){
     }
 
     return bpf_ntohl(ip->saddr);
+}
+
+static __always_inline __u32 calculate_hash2(struct iphdr* ip, struct udphdr* udp){
+    return ip->saddr ^ ip->daddr ^ (__u32)udp->source;
 }
 
 SEC("xdp")
@@ -74,7 +90,7 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
 
     bpf_printk("XDP: incoming packet for service VIP: %pI4\n", &ip->daddr);
 
-    __u32 hash = calculate_hash(ctx);
+    __u32 hash = calculate_hash2(ip, udp);
     __u32 offset = hash % SIZE;
     __u32* backend_id = bpf_map_lookup_elem(inner_map, &offset);
     if(!backend_id){
@@ -92,14 +108,17 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
     __u32 new_ip = backend->ip;
     ip->daddr = backend->ip;
 
-    udp->check = 0;
+    //udp->check = 0;
     
 
     // for(int i = 0; i < 6; i++){
     //     eth->h_dest[i] = backend->mac[i];
     // }
-
-    update_checksum(&ip->check, old_ip, new_ip, &ip->check);
+    update_checksum(&ip->check, old_ip, new_ip);
+    if(udp->check != 0){
+        update_checksum(&udp->check, old_ip, new_ip);
+    }
+    //update_checksum(&ip->check, old_ip, new_ip, &ip->check);
 
     return XDP_TX;
 }

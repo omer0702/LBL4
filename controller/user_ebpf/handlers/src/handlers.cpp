@@ -52,7 +52,13 @@ HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload, uint3
         vip = existing_vip;
     }
     else{
-        vip = 0x6400000A;//10.0.0.100
+        uint32_t suffix = sm.allocate_service_vip();
+        if(suffix == 0){
+            std::cerr << "[HANDLER] Max service limit reached, cannot allocate VIP for service: " << req.service_name() << "\n";
+            return HandlerResult::ERROR;
+        }
+
+        vip = htonl((10 << 24) | (0 << 16) | (0 << 8) | suffix); // 10.0.0.<suffix> 
         sm.register_service_vip(req.service_name(), vip);
         std::cout << "[HANDLER] assigned VIP " << vip << " to service: " << req.service_name() << "\n";
     }

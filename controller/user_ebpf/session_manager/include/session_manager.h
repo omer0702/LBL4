@@ -4,6 +4,8 @@
 #include <chrono>
 #include <mutex>
 #include <vector>
+#include <atomic>
+#include <arpa/inet.h>
 #include <string>
 #include "../../../../build/debug/controller/proto/service.pb.h"
 
@@ -70,6 +72,8 @@ public:
     uint32_t get_service_vip(const std::string& service_name);
     std::unordered_map<std::string, uint32_t> get_all_service_vips();
 
+    uint32_t allocate_service_vip();//next suffix
+
 private:
     SessionManager() = default;
     SessionManager(const SessionManager&) = delete;
@@ -81,6 +85,10 @@ private:
     std::unordered_map<std::string, std::vector<int>> service_groups;//service name -> list of fds
     std::unordered_map<std::string, uint32_t> service_vips;//service name -> vip
     std::mutex mtx;
+
+    std::atomic<uint32_t> next_vip_suffix{100};
+    const uint32_t max_services = 100;//max of vips(like in maps.h)
+    const uint32_t start_suffix = 100;
 };
 
 }
