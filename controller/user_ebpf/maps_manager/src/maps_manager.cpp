@@ -12,13 +12,10 @@ MapsManager::MapsManager(struct balancer_bpf* skel): skel(skel) {
 }
 
 bool MapsManager::update_service_map(uint32_t service_ip, const std::vector<uint32_t>& table) {
-    std::cout<<"here0"<<std::endl;
     int inner_map_fd = create_inner_map();
     if(inner_map_fd < 0){
-        std::cout<<"here1"<<std::endl;
         return false;
     }
-    std::cout<<"here2"<<std::endl;
 
     for(uint32_t i = 0; i<table.size(); ++i){
         uint32_t val = table[i];
@@ -86,6 +83,7 @@ bool MapsManager::update_backend_status(uint32_t backend_id, bool is_active) {
     return true;
 }
 
+
 int MapsManager::create_inner_map(){
     int fd= bpf_map_create(BPF_MAP_TYPE_ARRAY, "maglev",
                               sizeof(uint32_t),
@@ -102,4 +100,25 @@ int MapsManager::create_inner_map(){
     }
     
     return fd;
+}
+
+
+
+void MapsManager::trigger_rebuild(){
+    needs_rebuild = true;
+    cv.notify_one();
+}
+
+void MapsManager::wait_for_update(int seconds){
+    std::unique_lock<std::mutex> lock(update_mutex);
+
+    cv.wait_for(lock, std::chrono::seconds(seconds), [&]{
+        return needs_rebuild || shutdown;
+    });
+
+    needs_rebuild = false;
+}
+
+void MapsManager::change_shutdown(){
+    shutdown = true;
 }

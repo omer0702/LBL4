@@ -63,10 +63,12 @@ HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload, uint3
         std::cout << "[HANDLER] assigned VIP " << vip << " to service: " << req.service_name() << "\n";
     }
 
+    std::string backend_ip_str = req.backend_ip();
+    uint32_t backend_ip;
+    inet_pton(AF_INET, backend_ip_str.c_str(), &backend_ip);
+    auto token = sm.create_session(fd, req.service_name(), backend_ip, port);
 
-    auto token = sm.create_session(fd, req.service_name(), ip, port);
-
-    maps_manager.add_backend(fd, ip, port, mac);
+    maps_manager.add_backend(fd, backend_ip, port, mac);
     
     lb::InitResponse resp;
     resp.set_accepted(true);

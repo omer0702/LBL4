@@ -21,8 +21,9 @@ struct ConnectionState{
 };
 
 
-int start_listen(uint16_t port);
-void run_loop(int listen_fd, MapsManager& maps_manager, std::atomic<bool>& external_running);
+int start_listen_tcp(uint16_t port);
+int start_listen_unix(const char* path);
+void run_loop(int tcp_listen_fd, int unix_listen_fd, MapsManager& maps_manager, std::atomic<bool>& external_running);
 void stop_loop();
 void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payload, int epfd,
                     std::unordered_map<int, ConnectionState>& conn_map,

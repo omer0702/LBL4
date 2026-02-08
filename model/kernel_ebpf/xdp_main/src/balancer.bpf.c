@@ -43,7 +43,18 @@ static __always_inline __u32 calculate_hash(struct xdp_md *ctx){
 }
 
 static __always_inline __u32 calculate_hash2(struct iphdr* ip, struct udphdr* udp){
-    return ip->saddr ^ ip->daddr ^ (__u32)udp->source;
+    //MurmurHash3
+    __u32 hash = ip->saddr;
+    hash ^= ip->daddr;
+    hash ^= (__u32)udp->source;
+
+    hash ^= hash >>16;
+    hash *= 0x85ebca6b;
+    hash ^= hash >>13;
+    hash *= 0xc2b2ae35;
+    hash ^= hash >>16;
+
+    return hash;
 }
 
 SEC("xdp")

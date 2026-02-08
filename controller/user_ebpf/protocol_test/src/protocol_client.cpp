@@ -6,6 +6,7 @@
 #include <thread>
 #include <dlfcn.h>
 #include <string>
+#include <sys/un.h>
 
 #include "protocol_decoder.h"
 #include "protocol_encoder.h"
@@ -77,45 +78,67 @@ void handle_server_messages(int sock, std::string& token) {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "Usage: ./protocol_client <local_ip_to_bind>\n";
-        std::cerr << "Example: ./protocol_client 127.0.0.2\n";
+        std::cerr << "Usage: ./protocol_client <local_ip_to_bind> [unix_socket_path]\n";
         return 1;
     }
     std::string my_ip = argv[1];
+    std::string path = (argc >= 3) ? argv[2] : "";
 
     std::thread udp_thread(start_udp_receiver, 9000, my_ip);
     udp_thread.detach();
 
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    sockaddr_in local_addr = {};
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_port = 0;
-    if(inet_pton(AF_INET, my_ip.c_str(), &local_addr.sin_addr) <= 0){
-        std::cerr << "Invlaid local ip address\n";
-        return 1;
+    int sock;
+    if(!path.empty()){
+        sock = socket(AF_UNIX, SOCK_STREAM, 0);
+        struct sockaddr_un addr = {};
+        addr.sun_family = AF_UNIX;
+        strncpy(addr.sun_path, path.c_str(), sizeof(addr.sun_path) - 1);
+
+        if (connect(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
+            perror("Could not connect to Controller with UNIX socket");
+            close(sock);
+            return 1;
+        }
+        std::cout << "[CLIENT] Connected to Controller with UNIX socket: " << path << "\n";
     }
+    else {
+        sock = socket(AF_INET, SOCK_STREAM, 0);
+        sockaddr_in local_addr = {};
+        local_addr.sin_family = AF_INET;
+        local_addr.sin_port = 0;
+        if(inet_pton(AF_INET, my_ip.c_str(), &local_addr.sin_addr) <= 0){
+            std::cerr << "Invlaid local ip address\n";
+            return 1;
+        }
 
-    if(bind(sock, (sockaddr*)&local_addr, sizeof(local_addr)) < 0){
-        perror("bind TCP sokcet failed");
-        close(sock);
-        return 1;
-    }
+        if(bind(sock, (sockaddr*)&local_addr, sizeof(local_addr)) < 0){
+            perror("bind TCP sokcet failed");
+            close(sock);
+            return 1;
+        }
 
-    sockaddr_in addr = {};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(8080);
-    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+        sockaddr_in addr = {};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(8080);
+        inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
-    if (connect(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
-        std::cerr << "Could not connect to Controller\n";
-        close(sock);
-        return 1;
+        if (connect(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
+            std::cerr << "Could not connect to Controller\n";
+            close(sock);
+            return 1;
+        }
     }
 
     lb::InitRequest req;
     req.set_service_name("serviceA");
+    req.set_backend_ip(my_ip);
     auto bytes = lb::protocol::encoder::encode_init_request(req);
-    send(sock, bytes.data(), bytes.size(), 0);
+    if(send(sock, bytes.data(), bytes.size(), 0) < 0){
+        std::cerr << "Failed to send InitRequest\n";
+        perror("send");
+        close(sock);
+        return 1;
+    }
 
     uint8_t res_buf[1024];
     int n = recv(sock, res_buf, sizeof(res_buf), 0);

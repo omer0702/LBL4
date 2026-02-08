@@ -15,6 +15,7 @@
 #include <net/if_arp.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+#include <sys/un.h>
 
 #include "protocol_decoder.h"
 #include "protocol_encoder.h"
@@ -81,10 +82,21 @@ bool get_mac_address(uint32_t ip, uint8_t* mac) {//from arp table
 void close_client(int fd, int epfd, std::unordered_map<int, ConnectionState>& conn_map, int& active_connections, MapsManager& maps_manager) {
     maps_manager.update_backend_status(fd, false);
     epoll_ctl(epfd, EPOLL_CTL_DEL, fd, NULL);
-    close(fd);
     active_connections--;
+
+    auto it = conn_map.find(fd);
+    if(it != conn_map.end()){
+        if(it->second.mac){
+            delete[] it->second.mac;
+        }
+        conn_map.erase(it);
+    }
     conn_map.erase(fd);
+
     lb::session::SessionManager::instance().remove_session(fd);
+
+    maps_manager.trigger_rebuild();
+    close(fd);
 }
 
 static int make_nonblocking(int fd) {
@@ -93,7 +105,7 @@ static int make_nonblocking(int fd) {
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-int start_listen(uint16_t port) {
+int start_listen_tcp(uint16_t port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) { perror("socket"); return -1; }
 
@@ -125,6 +137,40 @@ int start_listen(uint16_t port) {
 
     return fd;
 }
+
+int start_listen_unix(const char* path){
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if(fd < 0){
+        perror("socket unix");
+        return -1;
+    }
+
+    sockaddr_un addr{};
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
+    unlink(path);
+
+    if(bind(fd, (sockaddr*)&addr, sizeof(addr)) < 0){
+        perror("bind unix");
+        close(fd);
+        return -1;
+    }
+
+    if(listen(fd, 128) < 0){
+        perror("listen unix");
+        close(fd);
+        return -1;
+    }
+
+    if(make_nonblocking(fd) < 0){
+        perror("fcntl unix");
+        close(fd);
+        return -1;
+    }
+
+    return fd;
+}
+
 
 // ssize_t send_all(int fd, const uint8_t* data, size_t len) {
 //     size_t total = 0;
@@ -201,27 +247,37 @@ void send_get_reports_request(int fd) {
 }
 
 
-void run_loop(int listen_fd, MapsManager& maps_manager, std::atomic<bool>& external_running) {
+void run_loop(int tcp_listen_fd, int unix_listen_fd, MapsManager& maps_manager, std::atomic<bool>& external_running) {
     const int MAX_EVENTS = 64;
     int epfd = epoll_create1(0);
     if (epfd < 0) { perror("epoll_create1"); return; }
 
     setup_timer(epfd);
 
-    epoll_event ev{};
-    ev.events = EPOLLIN;
-    ev.data.fd = listen_fd;
-    if (epoll_ctl(epfd, EPOLL_CTL_ADD, listen_fd, &ev) < 0) {
-        perror("epoll_ctl add listen");
+    epoll_event ev_tcp{};
+    ev_tcp.events = EPOLLIN;
+    ev_tcp.data.fd = tcp_listen_fd;
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, tcp_listen_fd, &ev_tcp) < 0) {
+        perror("epoll_ctl add tcp listen");
         close(epfd);
         return;
     }
+
+    epoll_event ev_unix{};
+    ev_unix.events = EPOLLIN;
+    ev_unix.data.fd = unix_listen_fd;
+    if (epoll_ctl(epfd, EPOLL_CTL_ADD, unix_listen_fd, &ev_unix) < 0) {
+        perror("epoll_ctl add unix listen");
+        close(epfd);
+        return;
+    }
+
 
     std::unordered_map<int, ConnectionState> conn_map;
 
     epoll_event events[MAX_EVENTS];
 
-    std::cout << "[EPOLL] Listening...\n";
+    std::cout << "[EPOLL] Listening on TCP and UNIX socket...\n";
 
     while (external_running && running) {
         int n = epoll_wait(epfd, events, MAX_EVENTS, -1);
@@ -231,29 +287,31 @@ void run_loop(int listen_fd, MapsManager& maps_manager, std::atomic<bool>& exter
             break;
         }
         if (n == 0) continue;
-
         for (int i = 0; i < n; ++i) {
             int fd = events[i].data.fd;
             uint32_t ev_flags = events[i].events;
 
-            if (fd == listen_fd) {
+            if (fd == tcp_listen_fd || fd == unix_listen_fd) {
                 while (true) {
                     if( active_connections >= MAX_CONNECTIONS) {//handle flood(DOS) problem
                         std::cerr << "[EPOLL] Max connections reached, rejecting new connections\n";
                         break;
                     }
 
-                    struct sockaddr_in client_addr;
+                    struct sockaddr_storage client_addr;
                     socklen_t client_len = sizeof(client_addr);
-                    int client = accept(listen_fd, (struct sockaddr*)&client_addr, &client_len);
+                    int client = accept(fd, (struct sockaddr*)&client_addr, &client_len);
                     if (client < 0) {
+                        //std::cout <<"here3\n";
                         if (errno == EAGAIN || errno == EWOULDBLOCK) break;
                         perror("accept");
+                        //std::cout <<"here4\n";
                         break;
                     }
 
                     active_connections++;
                     make_nonblocking(client);
+
                     epoll_event cev{};
                     cev.events = EPOLLIN | EPOLLRDHUP | EPOLLHUP | EPOLLERR;
                     cev.data.fd = client;
@@ -262,11 +320,25 @@ void run_loop(int listen_fd, MapsManager& maps_manager, std::atomic<bool>& exter
                         close(client);
                         continue;
                     }
+                    //std::cout <<"here6\n";
 
-                    uint8_t* mac;
-                    get_mac_address(client_addr.sin_addr.s_addr, mac);
-                    conn_map[client] = {{}, client_addr.sin_addr.s_addr, ntohs(client_addr.sin_port), mac};
-                    std::cout << "[EPOLL] New client: fd=" << client << ", IP and MAC:" << client_addr.sin_addr.s_addr << "|" << mac << "\n";
+                    uint32_t ip = 0;
+                    uint16_t port = 0;
+                    uint8_t* mac = new uint8_t[6]();
+                    if(client_addr.ss_family = AF_INET) {
+                        struct sockaddr_in* s = (struct sockaddr_in*)&client_addr;
+                        ip = s->sin_addr.s_addr;
+                        port = ntohs(s->sin_port);
+                        get_mac_address(ip, mac);
+                    }
+                    else if(client_addr.ss_family = AF_UNIX){
+                        ip = 0;
+                        port = 0;
+                    }
+
+                    
+                    conn_map[client] = {{}, ip, port, mac};
+                    std::cout << "[EPOLL] New client: fd=" << client << ", IP and MAC:" << ip << "|" << mac << "\n";
                 }
             } 
             else if(fd == timerfd){

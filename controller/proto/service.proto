@@ -9,6 +9,7 @@ message InitRequest{
     string service_name = 1;
     string instance_id = 2;
     string session_token = 3; 
+    string backend_ip = 4;
 }
 
 message InitResponse{

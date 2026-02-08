@@ -21,6 +21,7 @@ std::atomic<bool> keep_running(true);
 
 void signal_handler(int signum) {
     keep_running = false;
+    
     std::cout << "[MAIN] Caught signal " << signum << ", shutting down..." << std::endl;
 }
 
@@ -42,36 +43,40 @@ int main() {
     auto& sm = lb::session::SessionManager::instance();
 
     std::thread maglev_thread([&](){
-        while(keep_running){
         std::cout << "[MAIN] Maglev update thread started\n";
-            while(true){
-                std::this_thread::sleep_for(std::chrono::seconds(5));
-                std::unordered_map<std::string, uint32_t> services = sm.get_all_service_vips();
+        while(keep_running){
+            maps_manager.wait_for_update(5);
+            if(!keep_running) break; //if we woke up because of shutdown
 
-                for(const auto& [name, vip] : services){
-                    std::vector<BackendScore> backend_scores = lb::routing::Scorer::score_service_instances(name);
-                    if(backend_scores.empty()){
-                        std::cout << "[MAIN] no backends for service: " << name << "\n";
-                        continue;
-                    }
+            std::unordered_map<std::string, uint32_t> services = sm.get_all_service_vips();
 
-                    MaglevBuilder builder(backend_scores);
-                    std::vector<uint32_t> table = builder.build_table();
-                    maps_manager.update_service_map(vip, table);
-                    
-                    std::cout << "[MAIN] updated maglev table for service: " << name << "\n";
+            for(const auto& [name, vip] : services){
+                std::vector<BackendScore> backend_scores = lb::routing::Scorer::score_service_instances(name);
+                if(backend_scores.empty()){
+                    std::cout << "[MAIN] no backends for service: " << name << "\n";
+                    continue;
                 }
+
+                MaglevBuilder builder(backend_scores);
+                std::vector<uint32_t> table = builder.build_table();
+                builder.test_maglev_builder(table, backend_scores);
+                maps_manager.update_service_map(vip, table);
+                    
+                std::cout << "[MAIN] updated maglev table for service: " << name << "\n";
             }
         }
     });
 
-    maglev_thread.detach();
+    maglev_thread.detach();//maybe replace with join
 
 
-    int listen_fd = lb::io_epoll::start_listen(PORT);
-    if (listen_fd < 0) return 1;
+    int tcp_listen_fd = lb::io_epoll::start_listen_tcp(PORT);
+    int unix_listen_fd = lb::io_epoll::start_listen_unix("./lb.sock");
+    if (tcp_listen_fd < 0 || unix_listen_fd < 0) return 1;
     std::cout << "[MAIN] Listening on port " << PORT << "\n";
 
-    lb::io_epoll::run_loop(listen_fd, maps_manager, keep_running);
+    lb::io_epoll::run_loop(tcp_listen_fd, unix_listen_fd, maps_manager, keep_running);
+    unlink("/tmp/lb.sock");
+    
     return 0;
 }
