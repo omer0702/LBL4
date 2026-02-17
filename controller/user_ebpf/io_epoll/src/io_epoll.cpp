@@ -302,10 +302,8 @@ void run_loop(int tcp_listen_fd, int unix_listen_fd, MapsManager& maps_manager, 
                     socklen_t client_len = sizeof(client_addr);
                     int client = accept(fd, (struct sockaddr*)&client_addr, &client_len);
                     if (client < 0) {
-                        //std::cout <<"here3\n";
                         if (errno == EAGAIN || errno == EWOULDBLOCK) break;
                         perror("accept");
-                        //std::cout <<"here4\n";
                         break;
                     }
 
@@ -320,7 +318,6 @@ void run_loop(int tcp_listen_fd, int unix_listen_fd, MapsManager& maps_manager, 
                         close(client);
                         continue;
                     }
-                    //std::cout <<"here6\n";
 
                     uint32_t ip = 0;
                     uint16_t port = 0;

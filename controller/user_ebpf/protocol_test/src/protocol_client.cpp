@@ -13,33 +13,41 @@
 #include "service.pb.h"
 #include "protocol_types.h"
 
-void start_udp_receiver(uint16_t port, const std::string& ip_addr) {
+void start_udp_receiver(uint16_t port, const std::string& my_ip) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) return;
 
     int opt = 1;
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    //setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));//for last check
 
     sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
-    inet_pton(AF_INET, ip_addr.c_str(), &addr.sin_addr);
+    // addr.sin_addr.s_addr = INADDR_ANY;
+    inet_pton(AF_INET, "10.0.0.100", &addr.sin_addr);//change to dynamic VIP
 
     if (bind(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
-        std::cerr << "[UDP] Failed to bind to " << ip_addr << ":" << port << " (Check if IP exists)\n";
+        std::cerr << "[UDP] Failed to bind to " << my_ip << ":" << port << " (Check if IP exists)\n";
         return;
     }
 
-    std::cout << "[UDP] Receiver ready on " << ip_addr << ":" << port << "\n";
+    std::cout << "[UDP] Receiver ready on " << my_ip << ":" << port << "\n";
 
     char buffer[4096];
     while (true) {
         sockaddr_in client_addr;
         socklen_t addr_len = sizeof(client_addr);
         int n = recvfrom(sock, buffer, sizeof(buffer), 0, (sockaddr*)&client_addr, &addr_len);
+
         if (n > 0) {
-            std::cout << "\n[UDP] >>> SUCCESS! Packet received at Backend (" << ip_addr << ") <<<" << std::endl;
-            std::cout << "[UDP] Content: " << std::string(buffer, n) << std::endl;
+            char client_ip[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+            std::cout << "\n[UDP] >>>DSR SUCCESS! Packet from " << client_ip << " received at Backend (" << my_ip << ") <<<" << std::endl;
+
+            std::string response = "ACK from backend " + my_ip + "\n";
+            sendto(sock, response.c_str(), response.length(), 0, (struct sockaddr*)&client_addr, addr_len);
+            std::cout << "[UDP] response sent directly back to: " << client_ip << std::endl;
         }
     }
 }
