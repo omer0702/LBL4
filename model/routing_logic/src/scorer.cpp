@@ -10,7 +10,7 @@ std::vector<BackendScore> Scorer::score_service_instances(const std::string& ser
         lb::session::SessionInfo* session = sm.get_session_by_fd(fd);
         if(session){
             double score = calculate_score(session->metrics, session->state);
-            backend_scores.push_back(BackendScore{session->fd, score});
+            backend_scores.push_back(BackendScore{sm.get_logical_id(session->fd), score});
         }
     }
 

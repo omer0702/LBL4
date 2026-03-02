@@ -13,7 +13,7 @@ Monitor::Monitor(){
 }
 
 void Monitor::read_cpu_ticks(long &process_ticks, long &uptime_ticks){
-    std::ifstream stat_file("/proc/self/stat");
+    std::ifstream stat_file("/proc/stat");
     std::string line;
     for(int i = 0; i < 13; ++i) stat_file >> line; 
     long utime, stime;
@@ -36,7 +36,7 @@ RealMetrics Monitor::get_current_metrics(){
 
     uint32_t cpu_usage = 0;
     if(uptime_diff > 0){
-        cpu_usage = static_cast<uint32_t>((process_diff/uptime_diff) * 100.0);
+        cpu_usage = static_cast<uint32_t>((static_cast<double>(process_diff)/uptime_diff) * 100.0);
     }
 
     last_process_ticks = current_process;

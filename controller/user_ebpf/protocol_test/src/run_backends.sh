@@ -13,6 +13,7 @@ sudo modprobe ipip
 
 echo "adding VIP 10.0.0.100"
 sudo ip addr add 10.0.0.100/32 dev lo 2>/dev/null
+sudo ip addr add 192.168.1.50/24 dev lo 2>/dev/null
 
 sudo ip link add tunl_lb type ipip local any remote 127.0.0.1 
 sudo ip link set tunl_lb up
@@ -32,8 +33,18 @@ do
     IP="127.0.0.$i"
     echo "configuring $IP"
     sudo ip addr add $IP/32 dev lo 2>/dev/null
-    sudo "$CLIENT_BIN" $IP > "$SCRIPT_DIR/client_$i.log" 2>&1 &
+    if [ "$i" -eq 7 ]; then
+        echo "starting backend $IP at a strangled server"
+        sudo "$CLIENT_BIN" $IP $i > "$SCRIPT_DIR/client_$i.log" 2>&1 &
+        # sudo taskset -c 0 nice -n 19 "$CLIENT_BIN" $IP > "$SCRIPT_DIR/client_$i.log" 2>&1 &
+
+        # (taskset -c 0 yes > /dev/null) &
+        # LOAD_GEN_PID=$!
+    else
+        sudo "$CLIENT_BIN" $IP $i > "$SCRIPT_DIR/client_$i.log" 2>&1 &
+    fi
     sleep 0.2
 done
 
 echo "running backend servers with DSR support"
+

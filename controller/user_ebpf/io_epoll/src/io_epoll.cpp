@@ -212,7 +212,6 @@ void choose_handler(int fd, MessageType type, const std::vector<uint8_t>& payloa
         case MessageType::REPORT:
             //std::cout << "here1\n";
             res = lb::handlers::handle_get_report_resp(fd, payload);
-            lb::session::SessionManager::instance().print_session_stats();
 
             break;
         case MessageType::CLOSE_REQ:
@@ -353,6 +352,7 @@ void run_loop(int tcp_listen_fd, int unix_listen_fd, MapsManager& maps_manager, 
                     send_keepalive_request(a_fd);
                     if(timer_tick_counter % 5 == 0) {
                         send_get_reports_request(a_fd);
+                        //lb::session::SessionManager::instance().print_session_stats();
                     }
                 }
             }

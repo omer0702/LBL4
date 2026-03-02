@@ -1,10 +1,13 @@
 #!/bin/bash
 
 echo "stopping backend servers"
-sudo pkill protocol_client
+sudo pkill protocol_client 2>/dev/null
+# sudo pkill -f "yes" 2>/dev/null
 
 echo "removing VIP address"
 sudo ip addr del 10.0.0.100/32 dev lo 2>/dev/null
+sudo ip addr del 192.168.1.50/24 dev lo 2>/dev/null
+
 
 #sudo ip addr del 127.0.0.2/32 dev lo 2>/dev/null
 

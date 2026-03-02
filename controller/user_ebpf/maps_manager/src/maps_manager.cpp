@@ -5,20 +5,84 @@
 #include "common_structs.h"
 #include <unistd.h>
 #include <arpa/inet.h>
-
+#include <map>
+#include "../../session_manager/include/session_manager.h"
+// #include <cstdio>
  
 
 MapsManager::MapsManager(struct balancer_bpf* skel): skel(skel) {
 }
 
 bool MapsManager::update_service_map(uint32_t service_ip, const std::vector<uint32_t>& table) {
+    int outer_map_fd = bpf_map__fd(skel->maps.services_map);
+    int inner_map_fd;
+
+    int lookup_res = bpf_map_lookup_elem(outer_map_fd, &service_ip, &inner_map_fd);
+    if(lookup_res != 0){
+        std::cout<<"[MAPS] creating new inner map for service: "<<service_ip<<std::endl;
+        inner_map_fd=create_inner_map();
+
+        // unsigned char *bytes = (unsigned char*)&service_ip;
+        // printf("[MAPS] cinserting VIP: %u.%u.%u.%u. (HEX: %02x %02x %02x %02x)\n",
+        //      bytes[0], bytes[1], bytes[2], bytes[3],
+        //      bytes[0], bytes[1], bytes[2], bytes[3]);
+        bpf_map_update_elem(outer_map_fd, &service_ip, &inner_map_fd, BPF_ANY);
+    }
+
+    // std::map<uint32_t, int> counts;
+    // for(auto x : table)counts[x]++;
+    // std::cout << "[DEBUG], size: "<<table.size()<<std::endl;
+    // for(auto const& [id, count]: counts){
+    //     std::cout<<"ID="<<id<<"count="<<count<<std::endl;
+    // }
+
+    uint32_t counts2[6]={0,0,0,0,0,0};
+    int c=0;
+    for(uint32_t i = 0; i< table.size(); ++i){
+        uint32_t val = table[i];
+        bpf_map_update_elem(inner_map_fd, &i, &val, BPF_ANY);
+
+
+        if(val>=0 && val<=5){
+            counts2[val]++;
+            if(val==5){
+                c++;
+            }
+        }
+        else{
+            std::cout<<"warning!!\n";
+        }
+    }
+
+    std::cout<<"distribution in map after update :"<<c<<std::endl;
+    for(int i=0; i<6; ++i){
+        std::cout<<"server ID="<<i<<"count="<<counts2[i]<<std::endl;
+    }
+
+    std::cout<<"[MAPS] in place update complete for VIP= "<<service_ip<<std::endl;
+
+    return true;
+}
+bool MapsManager::update_service_map2(uint32_t service_ip, const std::vector<uint32_t>& table) {
     int inner_map_fd = create_inner_map();
     if(inner_map_fd < 0){
         return false;
     }
 
-    for(uint32_t i = 0; i<table.size(); ++i){
+    std::map<uint32_t, int> counts;
+    for(auto x : table)counts[x]++;
+    std::cout << "[DEBUG]\n";
+    for(auto const& [id, count]: counts){
+        std::cout<<"ID="<<id<<"count="<<count<<std::endl;
+    }
+    
+    uint32_t test_val = 0x12345678;
+    uint32_t test_key = 0;
+    bpf_map_update_elem(inner_map_fd, &test_key, &test_val, BPF_ANY);
+
+    for(uint32_t i = 1; i<table.size(); ++i){
         uint32_t val = table[i];
+        //std::cout<<"DEBUG, val= "<<val<<std::endl;
         bpf_map_update_elem(inner_map_fd, &i, &val, BPF_ANY);
     }
 
@@ -46,7 +110,13 @@ bool MapsManager::update_service_map(uint32_t service_ip, const std::vector<uint
     return true;
 }
 
-bool MapsManager::add_backend(int backend_id, uint32_t ip, uint16_t port, uint8_t* mac) {
+bool MapsManager::add_backend(int socket_fd, uint32_t ip, uint16_t port, uint8_t* mac) {
+    int logical_id = lb::session::SessionManager::instance().get_logical_id(socket_fd);
+    if(logical_id==-1){
+        std::cerr<<"[MAPS MANAGER] no logical id found for fd:"<<socket_fd<<std::endl;
+        return false;
+    }
+
     backend_info info{};
     info.ip = ip;
     info.port = port;
@@ -54,9 +124,9 @@ bool MapsManager::add_backend(int backend_id, uint32_t ip, uint16_t port, uint8_
     memcpy(info.mac, mac, 6);
 
     int fd = bpf_map__fd(skel->maps.backends_map);
-    int error = bpf_map_update_elem(fd, &backend_id, &info, BPF_ANY);
+    int error = bpf_map_update_elem(fd, &logical_id, &info, BPF_ANY);
     if(error){
-        std::cerr << "[MAPS_MANAGER]Failed to update backend: " << backend_id << std::endl;
+        std::cerr << "[MAPS_MANAGER]Failed to update backend: " << logical_id << std::endl;
         return false;
     }
     

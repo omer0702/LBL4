@@ -109,13 +109,14 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
 
     //lookup service
     __u32 service_ip = ip->daddr;
-    bpf_printk("XDP: UDP packet detected: dest_ip-raw_hex=0x%x, decimal=%u", service_ip, service_ip);
+    bpf_printk("XDP: looking for VIP: %pI4\n", &service_ip);
 
     void* inner_map = bpf_map_lookup_elem(&services_map, &service_ip);
     if(!inner_map){
+        bpf_printk("XDP: failed!!\n");
         return XDP_PASS;
     }
-
+    
     bpf_printk("XDP: incoming packet for service VIP: %pI4\n", &ip->daddr);
 
     __u32 hash = calculate_hash2(ip, udp);
@@ -127,8 +128,10 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
 
     struct backend_info* backend = bpf_map_lookup_elem(&backends_map, backend_id);
     if(!backend || !backend->is_active){
+        bpf_printk("XDP: failed2!!\n");
         return XDP_PASS;
     }
+    bpf_printk("XDP: routing to backend: %d\n", backend->ip);
 
     //DSR:
     if(bpf_xdp_adjust_head(ctx, 0 - (int)sizeof(struct iphdr))){
@@ -159,6 +162,7 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
         return XDP_PASS;
     }
 
+    inner_udp->dest= backend->port;
     inner_udp->check = 0;
 
     //__builtin__memmove(new_eth, (void*)new_eth + sizeof(struct iphdr), sizeof(struct ethhdr));

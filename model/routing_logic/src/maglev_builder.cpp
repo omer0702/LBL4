@@ -85,6 +85,7 @@ void MaglevBuilder::test_maglev_builder(const std::vector<uint32_t>& table, cons
     for(const auto& b : backends){
         double percentage = (double)counters[b.backend_id] / table.size() * 100.0;
         std::cout << "Backend ID: " << b.backend_id 
+                  << ", Score:" << b.score
                   << ", Count: " << counters[b.backend_id] 
                   << ", Percentage: " << std::fixed << std::setprecision(2) <<
                     percentage << "%\n";

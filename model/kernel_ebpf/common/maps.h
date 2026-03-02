@@ -25,7 +25,7 @@ struct {
 
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
-    __uint(max_entries, MAX_BACKENDS);
+    __uint(max_entries, MAX_BACKENDS);//change to 256*100
     __type(key, __u32);//backend ID
     __type(value, struct backend_info);
 }backends_map SEC(".maps");

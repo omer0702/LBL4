@@ -12,6 +12,7 @@
 #include "protocol_encoder.h"
 #include "service.pb.h"
 #include "protocol_types.h"
+#include <monitor.h>
 
 void start_udp_receiver(uint16_t port, const std::string& my_ip) {
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -25,7 +26,7 @@ void start_udp_receiver(uint16_t port, const std::string& my_ip) {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     // addr.sin_addr.s_addr = INADDR_ANY;
-    inet_pton(AF_INET, "10.0.0.100", &addr.sin_addr);//change to dynamic VIP
+    inet_pton(AF_INET, "10.0.0.100", &addr.sin_addr);//change to vip by service
 
     if (bind(sock, (sockaddr*)&addr, sizeof(addr)) < 0) {
         std::cerr << "[UDP] Failed to bind to " << my_ip << ":" << port << " (Check if IP exists)\n";
@@ -44,7 +45,7 @@ void start_udp_receiver(uint16_t port, const std::string& my_ip) {
             char client_ip[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
             std::cout << "\n[UDP] >>>DSR SUCCESS! Packet from " << client_ip << " received at Backend (" << my_ip << ") <<<" << std::endl;
-
+            std::cout<<"receivd packet, destination ip in IPIP header was: " << inet_ntoa(client_addr.sin_addr)<<std::endl;
             std::string response = "ACK from backend " + my_ip + "\n";
             sendto(sock, response.c_str(), response.length(), 0, (struct sockaddr*)&client_addr, addr_len);
             std::cout << "[UDP] response sent directly back to: " << client_ip << std::endl;
@@ -52,8 +53,11 @@ void start_udp_receiver(uint16_t port, const std::string& my_ip) {
     }
 }
 
-void handle_server_messages(int sock, std::string& token) {
+void handle_server_messages(int sock, std::string& token, const std::string& my_ip) {
     uint8_t buffer[4096];
+    lb::monitor::Monitor resource_monitor;
+
+    resource_monitor.get_current_metrics();
     while (true) {
         int n = recv(sock, buffer, sizeof(buffer), 0);
         if (n <= 0) break;
@@ -71,12 +75,22 @@ void handle_server_messages(int sock, std::string& token) {
                 resp.set_session_token(token);
                 auto bytes = lb::protocol::encoder::encode_keepalive_resp(resp);
                 send(sock, bytes.data(), bytes.size(), 0);
-            } 
+            }
             else if (type == lb::protocol::MessageType::GET_REPORTS_REQ) {
+                auto metrics = resource_monitor.get_current_metrics();
+                if(metrics.cpu_usage > 50){
+                    std::cout << "[WARNING!!!]" << std::endl;
+                }
+                if(my_ip != "127.0.0.7"){
+                    metrics.memory_usage = 90;
+                    metrics.cpu_usage = 90;
+                }
+
                 lb::ServiceReport report;
                 report.set_session_token(token);
-                report.set_cpu_usage(20);
-                report.set_memory_usage(10);
+                report.set_cpu_usage(metrics.cpu_usage);
+                report.set_memory_usage(metrics.memory_usage);
+                std::cout << "[REPORT] sending metrics: cpu=" << metrics.cpu_usage << ", mem="<< metrics.memory_usage << std::endl;
                 auto bytes = lb::protocol::encoder::encode_report(report);
                 send(sock, bytes.data(), bytes.size(), 0);
             }
@@ -85,14 +99,16 @@ void handle_server_messages(int sock, std::string& token) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
+    if (argc < 3) {
         std::cerr << "Usage: ./protocol_client <local_ip_to_bind> [unix_socket_path]\n";
         return 1;
     }
     std::string my_ip = argv[1];
-    std::string path = (argc >= 3) ? argv[2] : "";
+    std::string path = (argc >= 4) ? argv[3] : "";
 
-    std::thread udp_thread(start_udp_receiver, 9000, my_ip);
+    int i = std::stoi(argv[2]);
+    uint16_t port = 9000 + i;
+    std::thread udp_thread(start_udp_receiver, port, my_ip);
     udp_thread.detach();
 
     int sock;
@@ -140,6 +156,8 @@ int main(int argc, char** argv) {
     lb::InitRequest req;
     req.set_service_name("serviceA");
     req.set_backend_ip(my_ip);
+    req.set_udp_port(port);
+    
     auto bytes = lb::protocol::encoder::encode_init_request(req);
     if(send(sock, bytes.data(), bytes.size(), 0) < 0){
         std::cerr << "Failed to send InitRequest\n";
@@ -160,7 +178,7 @@ int main(int argc, char** argv) {
         std::cout << "[CLIENT] Registered as " << my_ip << ". Token: " << token << "\n";
     }
 
-    handle_server_messages(sock, token);
+    handle_server_messages(sock, token, my_ip);
     close(sock);
     return 0;
 }

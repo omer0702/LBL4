@@ -16,7 +16,10 @@ target_include_directories(protocol_client PRIVATE
     ${CMAKE_BINARY_DIR}/controller/proto
 )
 
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 set_target_properties(protocol_client PROPERTIES
-    INSTALL_RPATH_USE_LINK_PATH TRUE
     BUILD_WITH_INSTALL_RPATH TRUE
+
+    INSTALL_RPATH "$ORIGIN/../../monitor"
 )

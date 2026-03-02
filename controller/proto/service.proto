@@ -10,6 +10,7 @@ message InitRequest{
     string instance_id = 2;
     string session_token = 3; 
     string backend_ip = 4;
+    uint32 udp_port = 5;
 }
 
 message InitResponse{

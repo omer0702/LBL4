@@ -66,9 +66,11 @@ HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload, uint3
     std::string backend_ip_str = req.backend_ip();
     uint32_t backend_ip;
     inet_pton(AF_INET, backend_ip_str.c_str(), &backend_ip);
-    auto token = sm.create_session(fd, req.service_name(), backend_ip, port);
+    uint16_t udp_port = htons(static_cast<uint16_t>(req.udp_port()));
+    auto token = sm.create_session(fd, req.service_name(), backend_ip, udp_port);
 
-    maps_manager.add_backend(fd, backend_ip, port, mac);
+    sm.register_logical_id(fd);
+    maps_manager.add_backend(fd, backend_ip, udp_port, mac);
     
     lb::InitResponse resp;
     resp.set_accepted(true);

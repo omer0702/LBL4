@@ -74,6 +74,19 @@ public:
 
     uint32_t allocate_service_vip();//next suffix
 
+    uint32_t register_logical_id(int fd){
+        if(fd_to_id.find(fd) == fd_to_id.end()){
+            fd_to_id[fd] = next_logical_id++;
+        }
+
+        return fd_to_id[fd];
+    }
+
+    int get_logical_id(int fd) const{
+        auto it=fd_to_id.find(fd);
+        return (it!= fd_to_id.end())?it->second:-1;
+    }
+
 private:
     SessionManager() = default;
     SessionManager(const SessionManager&) = delete;
@@ -89,6 +102,9 @@ private:
     std::atomic<uint32_t> next_vip_suffix{100};
     const uint32_t max_services = 100;//max of vips(like in maps.h)
     const uint32_t start_suffix = 100;
+
+    std::map<int, int> fd_to_id;
+    uint32_t next_logical_id = 0;
 };
 
 }
