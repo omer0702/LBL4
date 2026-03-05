@@ -9,7 +9,8 @@ target_include_directories(lb_app PUBLIC
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/recovery/include
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/protocol/include
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/ebpf_loader
-
+    ${CMAKE_SOURCE_DIR}/model/kernel_ebpf/common
+    ${CMAKE_SOURCE_DIR}/controller/user_ebpf/stats/include
 )
 
 target_link_libraries(lb_app 
@@ -23,4 +24,5 @@ target_link_libraries(lb_app
     routing_logic
     ebpf_loader
     bpf
+    stats_worker
 )

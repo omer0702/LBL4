@@ -25,7 +25,7 @@ std::string SessionManager::generate_token() {
 
 
 std::string SessionManager::create_session(int fd, const std::string& service_name, uint32_t ip, uint16_t port) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::unique_lock<std::shared_mutex> lock(mtx);
     std::string token = generate_token();
 
     auto info = std::make_unique<SessionInfo>(fd, service_name, token, ip, port);
@@ -38,7 +38,7 @@ std::string SessionManager::create_session(int fd, const std::string& service_na
 
 
 SessionInfo* SessionManager::get_session_by_fd(int fd) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<std::shared_mutex> lock(mtx);
     auto it = session_mapping.find(fd);
     if (it == session_mapping.end()) return nullptr;
 
@@ -56,7 +56,7 @@ SessionInfo* SessionManager::get_session_by_fd(int fd) {
 
 
 std::vector<int> SessionManager::get_expired_sessions(int timeout_seconds){
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<std::shared_mutex> lock(mtx);
     std::vector<int> expired_fds;
     auto now = std::chrono::steady_clock::now();
 
@@ -72,7 +72,7 @@ std::vector<int> SessionManager::get_expired_sessions(int timeout_seconds){
 }
 
 std::vector<int> SessionManager::get_all_session_fds(){
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<std::shared_mutex> lock(mtx);
     std::vector<int> fds;
     for(const auto& [fd, session] : session_mapping){
         fds.push_back(fd);
@@ -82,7 +82,7 @@ std::vector<int> SessionManager::get_all_session_fds(){
 }
 
 std::vector<int> SessionManager::get_instances_for_service(const std::string& service_name){
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<std::shared_mutex> lock(mtx);
     auto it = service_groups.find(service_name);
     if(it == service_groups.end()){
         return {};
@@ -91,12 +91,12 @@ std::vector<int> SessionManager::get_instances_for_service(const std::string& se
     return it->second;
 }
 bool SessionManager::has_session(int fd) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<std::shared_mutex> lock(mtx);
     return session_mapping.find(fd) != session_mapping.end();
 }
 
 void SessionManager::update_last_seen(int fd) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::unique_lock<std::shared_mutex> lock(mtx);
     auto it = session_mapping.find(fd);
     if (it != session_mapping.end()) {
         it->second->last_seen = std::chrono::steady_clock::now();
@@ -105,7 +105,7 @@ void SessionManager::update_last_seen(int fd) {
 
 
 void SessionManager::remove_session(int fd) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::unique_lock<std::shared_mutex> lock(mtx);
     auto it = session_mapping.find(fd);
     if (it == session_mapping.end()) return;
 
@@ -121,7 +121,7 @@ void SessionManager::remove_session(int fd) {
 }
 
 void SessionManager::update_metrics(int fd, const lb::ServiceReport& report) {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::unique_lock<std::shared_mutex> lock(mtx);
     auto it = session_mapping.find(fd);
     if (it != session_mapping.end()) {//use has_session instead
         auto& metrics = it->second->metrics;
@@ -135,7 +135,7 @@ void SessionManager::update_metrics(int fd, const lb::ServiceReport& report) {
 }
 
 void SessionManager::print_session_stats(){
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<std::shared_mutex> lock(mtx);
     std::cout << "----- Session Statistics -----\n";//prints even if there is no sessions
     for(const auto& [fd, session] : session_mapping){
         const auto& metrics = session->metrics;
@@ -156,12 +156,12 @@ void SessionManager::print_session_stats(){
 
 
 void SessionManager::register_service_vip(const std::string& service_name, uint32_t vip){
-    std::lock_guard<std::mutex> lock(mtx);
+    std::unique_lock<std::shared_mutex> lock(mtx);
     service_vips[service_name] = vip;
 }
 
 uint32_t SessionManager::get_service_vip(const std::string& service_name){
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<std::shared_mutex> lock(mtx);
     auto it = service_vips.find(service_name);
     if(it != service_vips.end()){
         return it->second;
@@ -171,7 +171,7 @@ uint32_t SessionManager::get_service_vip(const std::string& service_name){
 }
 
 std::unordered_map<std::string, uint32_t> SessionManager::get_all_service_vips(){
-    std::lock_guard<std::mutex> lock(mtx);
+    std::shared_lock<std::shared_mutex> lock(mtx);
     return service_vips;
 }
 

@@ -13,6 +13,8 @@
 #include "scorer.h"
 #include "maglev_builder.h"
 #include "session_manager.h"
+#include "common_structs.h"
+#include "stats_worker.hpp"
 
 #define PORT 8080
 using namespace lb;
@@ -42,6 +44,9 @@ int main() {
     MapsManager maps_manager(ebpf_loader.get_skel());
     auto& sm = lb::session::SessionManager::instance();
 
+    lb::stats::StatsWorker stats_worker(maps_manager, 5000);
+    stats_worker.start();
+
     std::thread maglev_thread([&](){
         std::cout << "[MAIN] Maglev update thread started\n";
         while(keep_running){
@@ -63,6 +68,12 @@ int main() {
                 maps_manager.update_service_map(vip, table);
                     
                 std::cout << "[MAIN] updated maglev table for service: " << name << "\n";
+
+                // std::cout << "[MAIN] check statistics: \n";
+                // backend_stats test;
+                // if(maps_manager.get_backend_stats(5, test)){
+                //     std::cout << "[MAIN] backend 5 stats: packets= "<< test.num_of_packets<< ", bytes= "<<test.num_of_bytes<<std::endl;
+                // }
             }
         }
     });

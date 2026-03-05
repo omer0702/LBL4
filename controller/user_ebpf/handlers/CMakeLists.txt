@@ -10,6 +10,7 @@ target_include_directories(handlers PUBLIC
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/maps_manager/include
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/ebpf_loader
     ${CMAKE_SOURCE_DIR}/model/routing_logic/include
+    ${CMAKE_SOURCE_DIR}/model/kernel_ebpf/common
 
 )
 

@@ -2,7 +2,7 @@
 #include <unordered_map>
 #include <optional>
 #include <chrono>
-#include <mutex>
+#include <shared_mutex>
 #include <vector>
 #include <atomic>
 #include <arpa/inet.h>
@@ -97,7 +97,7 @@ private:
     std::unordered_map<int, std::unique_ptr<SessionInfo>> session_mapping;//fd -> session info
     std::unordered_map<std::string, std::vector<int>> service_groups;//service name -> list of fds
     std::unordered_map<std::string, uint32_t> service_vips;//service name -> vip
-    std::mutex mtx;
+    mutable std::shared_mutex mtx;
 
     std::atomic<uint32_t> next_vip_suffix{100};
     const uint32_t max_services = 100;//max of vips(like in maps.h)

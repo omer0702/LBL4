@@ -17,4 +17,9 @@ struct session_key{
     __u8 porotocol;
 };
 
+struct backend_stats{
+    __u64 num_of_packets;
+    __u64 num_of_bytes;
+};
+
 #endif 

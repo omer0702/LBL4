@@ -197,6 +197,15 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
     // }
     // //update_checksum(&ip->check, old_ip, new_ip, &ip->check);
 
+    //stats:
+    struct backend_stats *stats = bpf_map_lookup_elem(&stats_map, backend_id);
+    bpf_printk("here in backend id= %u", *backend_id);
+    if(stats){
+        bpf_printk("here2 in backend id= %u", *backend_id);
+        stats->num_of_packets++;
+        stats->num_of_bytes += inner_ip->tot_len;
+    }
+
     return XDP_TX;
 }
 

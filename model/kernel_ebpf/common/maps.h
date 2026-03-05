@@ -31,4 +31,11 @@ struct {
 }backends_map SEC(".maps");
 
 
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __uint(max_entries, MAX_BACKENDS);
+    __type(key, __u32);//backend_id(logical id)
+    __type(value, struct backend_stats);
+} stats_map SEC(".maps");
+
 #endif

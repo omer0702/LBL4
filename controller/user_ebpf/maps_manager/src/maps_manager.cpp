@@ -172,7 +172,33 @@ int MapsManager::create_inner_map(){
     return fd;
 }
 
+bool MapsManager::get_backend_stats(uint32_t logical_id, backend_stats &stats){
+    int num_of_cpus = libbpf_num_possible_cpus();
+    if(num_of_cpus < 0){
+        return false;
+    }
 
+    std::vector<backend_stats> cpu_stats(num_of_cpus);
+    int map_fd = bpf_map__fd(skel->maps.stats_map);
+
+    if(bpf_map_lookup_elem(map_fd, &logical_id, cpu_stats.data()) != 0){
+        return false;
+    }
+
+    stats.num_of_packets = 0;
+    stats.num_of_bytes = 0;
+
+    for(int i = 0; i< num_of_cpus; i++){
+        stats.num_of_packets += cpu_stats[i].num_of_packets;
+        stats.num_of_bytes += cpu_stats[i].num_of_bytes;
+    }
+
+    return true;
+}
+
+// std::map<uint32_t, backend_stats> get_all_stats(const std::vector<uint32_t>& active_ids){
+
+// }
 
 void MapsManager::trigger_rebuild(){
     needs_rebuild = true;
