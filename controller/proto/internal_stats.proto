@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package lb.stats;
+
+message BackendStat {
+    uint32 id = 1;
+    string service_name = 2;
+    uint32 ip = 3;
+    double pps = 4;
+    double bps = 5;
+    uint64 total_packets = 6;
+    uint32 cpu_usage = 7;
+    uint32 mem_usage = 8;
+    uint32 active_requests = 9; 
+}
+
+message StatsSample {
+    uint64 timestamp = 1;
+    repeated BackendStat stats = 2;
+}
+
+message StatsResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+service StatsCollector {
+    rpc ExportStats(StatsSample) returns (StatsResponse);
+}

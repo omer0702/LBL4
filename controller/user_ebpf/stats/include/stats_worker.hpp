@@ -7,6 +7,11 @@
 
 #include "maps_manager.hpp"
 #include "session_manager.h"
+#include <grpcpp/grpcpp.h>
+#include <google/protobuf/arena.h>
+#include "internal_stats.grpc.pb.h"
+#include "internal_stats.pb.h"
+
 
 namespace lb::stats {
 
@@ -33,5 +38,7 @@ private:
     std::atomic<bool> running{false};
     std::thread worker;
     std::map<uint32_t, BackendSnapshot> snapshots;
+
+    std::unique_ptr<lb::stats::StatsCollector::Stub> stats_collector_stub;
 };
 }

@@ -7,6 +7,7 @@
                 "${workspaceFolder}/controller/user_ebpf/protocol/include",
                 "${workspaceFolder}/build/debug/controller/proto",
                 "${workspaceFolder}/controller/user_ebpf/session_manager/include",
+                "/usr/include",
                 "${workspaceFolder}"
             ],
             "defines": [],

@@ -8,6 +8,7 @@ target_include_directories(stats_worker PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/../../include
     ${CMAKE_SOURCE_DIR}/../../../session
+    ${CMAKE_SOURCE_DIR}/controller/proto
 )
 
-target_link_libraries(stats_worker PUBLIC maps_manager session_manager)
+target_link_libraries(stats_worker PUBLIC maps_manager session_manager proto_files)

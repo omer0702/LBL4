@@ -4,7 +4,11 @@
 
 namespace lb::stats{
 StatsWorker::StatsWorker(MapsManager& maps_manager, uint32_t interval_ms):
-    maps_manager(maps_manager), interval_ms(interval_ms){}
+    maps_manager(maps_manager), interval_ms(interval_ms){
+        //Init gRPC stub
+        auto channel = grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials());
+        stats_collector_stub = lb::stats::StatsCollector::NewStub(channel);
+    }
 
 StatsWorker::~StatsWorker(){
     stop();
@@ -35,6 +39,8 @@ void StatsWorker::run(){
 }
 
 void StatsWorker::collect_metrics(){
+    lb::stats::StatsSample sample;
+    sample.set_timestamp(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
     auto& sm = lb::session::SessionManager::instance();
     std::vector<int> all_fds = sm.get_all_session_fds();
 
@@ -63,7 +69,29 @@ void StatsWorker::collect_metrics(){
                 << "] PPS:" << snap.pps << ", BPS:" << snap.bps
                 << ", Total packets: "<< curr.num_of_packets << std::endl;
             }
-        }   
+
+            lb::stats::BackendStat* stat = sample.add_stats();
+            stat->set_id(id);
+            stat->set_service_name(info?info->service_name:"unknown");
+            stat->set_ip(info?info->ip:0);
+            stat->set_pps(snap.pps);
+            stat->set_bps(snap.bps);
+            stat->set_total_packets(curr.num_of_packets);
+
+            stat->set_cpu_usage(info?info->metrics.cpu_usage:0);
+            stat->set_mem_usage(info?info->metrics.memory_usage:0);
+            stat->set_active_requests(info?info->metrics.active_requests:0);
+        }
+    }
+
+    if(sample.stats_size() > 0){
+        grpc::ClientContext context;
+        lb::stats::StatsResponse resp;
+        grpc::Status status = stats_collector_stub->ExportStats(&context, sample, &resp);
+
+        if (!status.ok()) {
+            std::cerr << "GRPC Failed to report stats: " << status.error_message() << std::endl;
+        }
     }
 }
 

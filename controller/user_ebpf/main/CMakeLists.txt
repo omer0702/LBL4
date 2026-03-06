@@ -11,12 +11,14 @@ target_include_directories(lb_app PUBLIC
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/ebpf_loader
     ${CMAKE_SOURCE_DIR}/model/kernel_ebpf/common
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/stats/include
+    
 )
 
 target_link_libraries(lb_app 
     io_epoll
     maps_manager
     recovery
+    stats_worker
     proto_files
     protocol
     session_manager
@@ -24,5 +26,4 @@ target_link_libraries(lb_app
     routing_logic
     ebpf_loader
     bpf
-    stats_worker
 )
