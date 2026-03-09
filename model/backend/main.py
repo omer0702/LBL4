@@ -1,9 +1,18 @@
 from fastapi import FastAPI
 from db.connection import test_connection, get_test_data_from_db
 from fastapi.middleware.cors import CORSMiddleware
+import threading
+from stats_service import serve_grpc
+from contextlib import asynccontextmanager
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    #Start the gRPC server in a separate thread
+    grpc_thread = threading.Thread(target=serve_grpc, daemon=True)
+    grpc_thread.start()
+    yield
 
-app= FastAPI()
+app= FastAPI(lifespan=lifespan)
 
 app.add_middleware(#enable to react(3000) access to backend(8000)
     CORSMiddleware,

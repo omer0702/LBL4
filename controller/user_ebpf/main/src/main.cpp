@@ -44,7 +44,7 @@ int main() {
     MapsManager maps_manager(ebpf_loader.get_skel());
     auto& sm = lb::session::SessionManager::instance();
 
-    lb::stats::StatsWorker stats_worker(maps_manager, 5000);
+    lb::stats::StatsWorker stats_worker(maps_manager, 5000);//add print
     stats_worker.start();
 
     std::thread maglev_thread([&](){

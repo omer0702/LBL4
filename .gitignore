@@ -9,3 +9,5 @@ vmlinux.h
 balancer.skel.h
 
 client_*.log
+
+internal_stats_pb2*.py
