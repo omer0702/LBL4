@@ -10,7 +10,7 @@ class Scorer {
 public:
     static std::vector<BackendScore> score_service_instances(const std::string& service_name);
 private:
-    static double calculate_score(const lb::session::ServiceMetrics& metrics, lb::session::SessionState& state);
+    static double calculate_score(const lb::session::ServiceMetrics& metrics, lb::session::SessionState& state, const std::string& service_name);
 };
 
 }

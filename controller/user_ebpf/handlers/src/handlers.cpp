@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 #include "../../../model/routing_logic/include/scorer.h"
 #include "../../../model/routing_logic/include/maglev_builder.h"
-
+#include "logger.hpp"
 
 using namespace lb::protocol;
 
@@ -79,6 +79,8 @@ HandlerResult handle_init_req(int fd, const std::vector<uint8_t>& payload, uint3
 
     auto bytes = encoder::encode_init_ack(resp);
     send_all(fd, bytes);
+    lb::logger::Logger::GetInstance().log(lb::stats::Severity::INFO, "BACKEND_REGISTERED", req.service_name(),
+     "New Backend registered: " + backend_ip_str + ":" + std::to_string(req.udp_port()));
 
     return HandlerResult::OK;
 }

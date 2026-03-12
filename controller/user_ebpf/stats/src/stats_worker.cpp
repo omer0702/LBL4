@@ -45,14 +45,14 @@ void StatsWorker::collect_metrics(){
     std::vector<int> all_fds = sm.get_all_session_fds();
 
     for(int fd : all_fds){
-        int id = sm.get_logical_id(fd);
-        if(id < 0){
+        int logical_id = sm.get_logical_id(fd);
+        if(logical_id < 0){
             continue;
         }
 
         backend_stats curr;
-        if(maps_manager.get_backend_stats(static_cast<uint32_t>(id), curr)){
-            BackendSnapshot& snap = snapshots[id];
+        if(maps_manager.get_backend_stats(static_cast<uint32_t>(logical_id), curr)){
+            BackendSnapshot& snap = snapshots[logical_id];
 
             uint64_t delta_p = curr.num_of_packets - snap.last_packets;
             uint64_t delta_b = curr.num_of_bytes - snap.last_bytes;
@@ -65,15 +65,16 @@ void StatsWorker::collect_metrics(){
 
             lb::session::SessionInfo* info = sm.get_session_by_fd(fd);
             if(info){
-                std::cout << "Backend [" << info->service_name << " | ID:" << id
+                std::cout << "Backend [" << info->service_name << " | ID:" << logical_id
                 << "] PPS:" << snap.pps << ", BPS:" << snap.bps
                 << ", Total packets: "<< curr.num_of_packets << std::endl;
             }
 
             lb::stats::BackendStat* stat = sample.add_stats();
-            stat->set_id(id);
+            stat->set_logical_id(logical_id);
             stat->set_service_name(info?info->service_name:"unknown");
             stat->set_ip(info?info->ip:0);
+            stat->set_port(info?info->port:0);
             stat->set_pps(snap.pps);
             stat->set_bps(snap.bps);
             stat->set_total_packets(curr.num_of_packets);

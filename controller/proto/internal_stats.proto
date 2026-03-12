@@ -3,15 +3,16 @@ syntax = "proto3";
 package lb.stats;
 
 message BackendStat {
-    uint32 id = 1;
+    uint32 logical_id = 1;
     string service_name = 2;
     uint32 ip = 3;
-    double pps = 4;
-    double bps = 5;
-    uint64 total_packets = 6;
-    uint32 cpu_usage = 7;
-    uint32 mem_usage = 8;
-    uint32 active_requests = 9; 
+    uint32 port = 4;
+    double pps = 5;
+    double bps = 6;
+    uint64 total_packets = 7;
+    uint32 cpu_usage = 8;
+    uint32 mem_usage = 9;
+    uint32 active_requests = 10; 
 }
 
 message StatsSample {
@@ -24,6 +25,26 @@ message StatsResponse {
     string message = 2;
 }
 
+enum Severity {
+    INFO = 0;
+    WARNING = 1;
+    CRITICAL = 2;
+}
+
+message EventRequest {
+    uint64 timestamp = 1;
+    string event_type = 2;
+    Severity severity = 3;
+    string service_name = 4;
+    string message = 5;
+    string metadata_json = 6;
+}
+
+message LogResponse {
+    bool success = 1;
+}
+
 service StatsCollector {
     rpc ExportStats(StatsSample) returns (StatsResponse);
+    rpc LogEvent(EventRequest) returns (LogResponse);
 }

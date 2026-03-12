@@ -1,4 +1,6 @@
 #include "scorer.h"
+#include "logger.hpp"
+
 
 namespace lb::routing {
 std::vector<BackendScore> Scorer::score_service_instances(const std::string& service_name) {
@@ -9,7 +11,7 @@ std::vector<BackendScore> Scorer::score_service_instances(const std::string& ser
     for(int fd : fds){
         lb::session::SessionInfo* session = sm.get_session_by_fd(fd);
         if(session){
-            double score = calculate_score(session->metrics, session->state);
+            double score = calculate_score(session->metrics, session->state, service_name);
             backend_scores.push_back(BackendScore{sm.get_logical_id(session->fd), score});
         }
     }
@@ -17,7 +19,7 @@ std::vector<BackendScore> Scorer::score_service_instances(const std::string& ser
     return backend_scores;
 }
 
-double Scorer::calculate_score(const lb::session::ServiceMetrics& metrics, lb::session::SessionState& state) {
+double Scorer::calculate_score(const lb::session::ServiceMetrics& metrics, lb::session::SessionState& state, const std::string& service_name) {
     if(state != lb::session::SessionState::ACTIVE){
         return 0.0;
     }
@@ -27,6 +29,12 @@ double Scorer::calculate_score(const lb::session::ServiceMetrics& metrics, lb::s
     if(score < 0.0){
         score = 0.0;
     }
+
+    // if(score > 90.0){
+    //     // lb::logger::Logger::GetInstance().log(lb::stats::CRITICAL, "HIGH_LOAD_ALERT", service_name,
+    //     // "Service instance  is under high load: CPU {}%, Memory {}%", 
+    //     //  metrics.cpu_usage, metrics.memory_usage);
+    // }
     
     return score;
 }

@@ -21,6 +21,7 @@
 #include "protocol_encoder.h"
 #include "session_manager.h"
 #include "handlers.h"
+#include "logger.hpp"
 
 namespace lb::io_epoll {
 
@@ -360,6 +361,9 @@ void run_loop(int tcp_listen_fd, int unix_listen_fd, MapsManager& maps_manager, 
                 if (ev_flags & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {//handle sudden disconnects problem
                     std::cout << "[EPOLL] Client disconnected: fd=" << fd << "\n";
                     close_client(fd, epfd, conn_map, active_connections, maps_manager);
+                    //lb::logger::Logger::GetInstance().log(lb::stats::WARNING, "BACKEND_DISCONNECTED",
+                    //    session::SessionManager::instance().get_session_by_fd(fd)->service_name,
+                    //    "Client disconnected unexpectedly, fd: " + std::to_string(fd));
                     continue;
                 }
 

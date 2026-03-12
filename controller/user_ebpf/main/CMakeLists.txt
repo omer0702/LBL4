@@ -25,5 +25,6 @@ target_link_libraries(lb_app
     handlers
     routing_logic
     ebpf_loader
+    logger
     bpf
 )

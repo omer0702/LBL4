@@ -43,3 +43,15 @@ def insert_metrics(backend_id, timestamp, cpu, mem, active_req, pps, bps, total_
     finally:
         conn.commit()
         release_connection(conn)
+
+
+def insert_event(event_type, severity, service_name, message, metadata_json=None):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""INSERT INTO events (event_type, severity, service_name, message, metadata)
+                         VALUES (%s, %s, %s, %s, %s)""",
+                        (event_type, severity, service_name, message, metadata_json))
+    finally:
+        conn.commit()
+        release_connection(conn)

@@ -15,6 +15,7 @@
 #include "session_manager.h"
 #include "common_structs.h"
 #include "stats_worker.hpp"
+#include "logger.hpp"
 
 #define PORT 8080
 using namespace lb;
@@ -44,8 +45,10 @@ int main() {
     MapsManager maps_manager(ebpf_loader.get_skel());
     auto& sm = lb::session::SessionManager::instance();
 
-    lb::stats::StatsWorker stats_worker(maps_manager, 5000);//add print
+    lb::stats::StatsWorker stats_worker(maps_manager, 5000);
     stats_worker.start();
+    lb::logger::Logger::GetInstance().init("localhost:50051");
+    lb::logger::Logger::GetInstance().log(lb::stats::Severity::INFO, "SYSTEM_START", "LB_CONTROLLER", "Logger initialized");
 
     std::thread maglev_thread([&](){
         std::cout << "[MAIN] Maglev update thread started\n";

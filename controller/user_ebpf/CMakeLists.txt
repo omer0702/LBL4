@@ -8,3 +8,6 @@ add_subdirectory(session_manager)
 add_subdirectory(handlers)
 add_subdirectory(ebpf_loader)
 add_subdirectory(stats)
+add_subdirectory(logger)
+
+include_directories(logger/include)

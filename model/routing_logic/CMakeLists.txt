@@ -7,4 +7,7 @@ target_include_directories(routing_logic PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/model/routing_logic/include
     ${CMAKE_SOURCE_DIR}/controller/user_ebpf/session_manager/include
+    ${CMAKE_SOURCE_DIR}/controller/user_ebpf/logger/include
+        ${CMAKE_SOURCE_DIR}/build/debug/controller/proto
+
 )
