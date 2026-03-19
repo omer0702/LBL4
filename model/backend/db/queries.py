@@ -55,3 +55,46 @@ def insert_event(event_type, severity, service_name, message, metadata_json=None
     finally:
         conn.commit()
         release_connection(conn)
+
+
+def get_services_overview():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT s.service_id, s.name, s.vip, 
+                       COUNT(b.backend_id) as total_backends,
+                       COUNT(CASE WHEN b.is_active = TRUE THEN 1 END) as active_backends,
+                       COALESCE(SUM(m.pps), 0) as total_pps
+                FROM services s
+                LEFT JOIN backends b ON s.service_id = b.service_id
+                LEFT JOIN LATERAL (
+                    SELECT pps FROM metrics_history 
+                    WHERE backend_id = b.backend_id 
+                    ORDER BY timestamp DESC LIMIT 1
+                ) m ON TRUE
+                GROUP BY s.service_id;
+            """)
+            rows = cur.fetchall()
+            return [{
+                "service_id": r[0], "name": r[1], "vip": r[2], 
+                "total_backends": r[3], "active_backends": r[4], 
+                "total_pps": r[5]
+            } for r in rows]
+    finally:
+        release_connection(conn)
+
+
+def get_latest_events(limit=20):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT event_id, timestamp, event_type, severity, service_name, message, metadata 
+                FROM events ORDER BY timestamp DESC LIMIT %s;
+            """, (limit,))
+            rows = cur.fetchall()
+            return [{"event_id": r[0], "timestamp": r[1], "event_type": r[2], 
+                     "severity": r[3], "service_name": r[4], "message": r[5], "metadata": r[6]} for r in rows]
+    finally:
+        release_connection(conn)

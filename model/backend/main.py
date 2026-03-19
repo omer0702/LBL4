@@ -4,6 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import threading
 from stats_service import serve_grpc
 from contextlib import asynccontextmanager
+from typing import List
+import schemas
+from db import queries
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,6 +24,34 @@ app.add_middleware(#enable to react(3000) access to backend(8000)
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+#Endpoints:
+@app.get("/api/overview", response_model=List[schemas.ServiceOverviewSchema])
+async def get_overview():
+    """שליפת תמונת מצב כללית עבור ה-Dashboard"""
+    return queries.get_services_overview()
+
+@app.get("/api/events", response_model=List[schemas.EventSchema])
+async def get_events(limit: int = 20):
+    """שליפת האירועים האחרונים מה-Logger"""
+    return queries.get_latest_events(limit)
+
+@app.get("/api/health")
+async def health_check():
+    """בדיקת תקינות המערכת (Backend + DB)"""
+    # כאן אפשר להוסיף בעתיד בדיקה אם ה-Controller שלח Heartbeat לאחרונה
+    return {
+        "status": "online",
+        "engine": "FastAPI",
+        "db_connected": True,
+        "controller_connected": True # נשפר את זה כשנוסיף Heartbeat
+    }
+
+# Endpoint לשליפת נתונים מפורטים על שירות ספציפי (לשלב 4)
+@app.get("/api/services/{service_id}/metrics")
+async def get_service_metrics(service_id: int):
+    pass
+
 
 #initial checks
 @app.get("/")
