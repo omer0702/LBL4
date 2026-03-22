@@ -48,11 +48,19 @@ async def health_check():
     }
 
 # Endpoint לשליפת נתונים מפורטים על שירות ספציפי (לשלב 4)
+# @app.get("/api/services/{service_id}/metrics")
+# async def get_service_metrics(service_id: int):
+#     pass
+
 @app.get("/api/services/{service_id}/metrics")
-async def get_service_metrics(service_id: int):
-    pass
+async def get_metrics(service_id: int):
+    return queries.get_service_history_multi(service_id)
 
+@app.get("/api/services/{service_id}/backends")
+async def get_backends(service_id: int):
+    return queries.get_service_backends_detailed(service_id)
 
+    
 #initial checks
 @app.get("/")
 def root():

@@ -98,3 +98,111 @@ def get_latest_events(limit=20):
                      "severity": r[3], "service_name": r[4], "message": r[5], "metadata": r[6]} for r in rows]
     finally:
         release_connection(conn)
+
+
+def get_service_history_by_time(service_id, minutes=10):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 
+                    date_trunc('second', m.timestamp) as ts,
+                    SUM(m.pps) as total_pps,
+                    SUM(m.bps) as total_bps,
+                    AVG((m.cpu_usage + m.mem_usage) / 2.0) as avg_score
+                FROM metrics_history m
+                JOIN backends b ON m.backend_id = b.backend_id
+                WHERE b.service_id = %s AND m.timestamp > NOW() - INTERVAL '%s minutes'
+                GROUP BY ts
+                ORDER BY ts ASC;
+            """, (service_id, minutes))
+            rows = cur.fetchall()
+            return [{"timestamp": r[0].isoformat(), "pps": float(r[1]), "bps": float(r[2]), "score": float(r[3])} for r in rows]
+    finally:
+        release_connection(conn)
+
+def get_service_history(service_id, limit=50):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT ts, total_pps, total_bps, avg_score FROM (
+                    SELECT 
+                        date_trunc('second', m.timestamp) as ts,
+                        SUM(m.pps) as total_pps,
+                        SUM(m.bps) as total_bps,
+                        AVG((m.cpu_usage + m.mem_usage) / 2.0) as avg_score,
+                    FROM metrics_history m
+                    JOIN backends b ON m.backend_id = b.backend_id
+                    WHERE b.service_id = %s
+                    GROUP BY ts
+                    ORDER BY ts DESC
+                    LIMIT %s
+                ) sub
+                ORDER BY ts ASC;
+            """, (service_id, limit))
+            rows = cur.fetchall()
+            return [{"timestamp": r[0].isoformat(), "pps": float(r[1]), "bps": float(r[2]), "score": float(r[3])} for r in rows]
+    finally:
+        release_connection(conn)
+
+
+def get_service_backends_detailed(service_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # שליפת הנתונים הכי עדכניים עבור כל שרת בשירות
+            cur.execute("""
+                SELECT DISTINCT ON (b.backend_id)
+                    b.backend_id, b.ip, b.port, b.is_active, b.logical_id,
+                    m.cpu_usage, m.mem_usage, m.active_requests, m.pps, m.total_packets
+                FROM backends b
+                LEFT JOIN metrics_history m ON b.backend_id = m.backend_id
+                WHERE b.service_id = %s
+                ORDER BY b.backend_id, m.timestamp DESC;
+            """, (service_id,))
+            rows = cur.fetchall()
+            return [{
+                "id": r[0], "ip": r[1], "port": r[2], "active": r[3], "logical_id": r[4],
+                "cpu": r[5] or 0, "mem": r[6] or 0, "active_req": r[7] or 0, 
+                "pps": r[8] or 0, "total_packets": r[9] or 0,
+                "score": 100 - ((r[5] or 0) + (r[6] or 0)) / 2 # חישוב ציון זמני (הפוך לעומס)
+            } for r in rows]
+    finally:
+        release_connection(conn)
+
+
+def get_service_history_multi(service_id, limit=50):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # שליפת 50 דגימות אחרונות לכל שרת בשירות
+            cur.execute("""
+            SELECT ts as timestamp, logical_id, SUM(pps) as pps
+            FROM(
+                SELECT date_trunc('second',m.timestamp) as ts, b.logical_id, m.pps,
+                    ROW_NUMBER() OVER (PARTITION BY b.backend_id, date_trunc('second',m.timestamp) ORDER BY m.timestamp DESC) as rn
+                FROM metrics_history m
+                JOIN backends b ON m.backend_id = b.backend_id
+                WHERE b.service_id = %s
+            ) t
+            WHERE rn <= %s
+            GROUP BY ts, logical_id
+            ORDER BY ts ASC;
+            """, (service_id, limit))
+            rows = cur.fetchall()
+            
+            # עיבוד הנתונים למבנה ש-Recharts אוהב: { timestamp: T, server1: PPS, server2: PPS, total: PPS }
+            data_map = {}
+            for ts, log_id, pps in rows:
+                ts_str = ts.isoformat()
+                if ts_str not in data_map:
+                    data_map[ts_str] = {"timestamp": ts_str, "total": 0}
+                
+                key = f"server_{log_id}"
+                data_map[ts_str][key] = float(pps)
+                data_map[ts_str]["total"] += float(pps)
+            
+            return sorted(list(data_map.values()), key=lambda x: x["timestamp"])
+    finally:
+        release_connection(conn)

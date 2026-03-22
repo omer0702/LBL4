@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { GlobalProvider } from "./context/GlobalContext";
 import Sidebar from "./components/Sidebar";
 import Dashboard from './pages/Dashboard';
+import ServiceDetails from './pages/ServiceDetails';
 
 const PlaceHolder = ({ title }) => (
   <div className="p-8 text-2xl font-bold">
@@ -31,7 +32,8 @@ function App(){
 
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/services" element={<PlaceHolder title="Services" />} />
+              <Route path="/services" element={<ServiceDetails />} />
+              <Route path="/services/:id" element={<ServiceDetails />} />
               <Route path="/traffic" element={<PlaceHolder title="Live Traffic" />} />
               <Route path="/logs" element={<PlaceHolder title="System Logs" />} />
               <Route path="/admin" element={<PlaceHolder title="Admin Control" />} />
