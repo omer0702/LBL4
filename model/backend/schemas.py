@@ -33,3 +33,10 @@ class EventSchema(BaseModel):
     service_name: Optional[str]
     message: str
     metadata: Optional[dict]
+
+
+class StressTestResult(BaseModel):
+    success_rate: float
+    avg_latency: float
+    packet_loss: int
+    throughput: float

@@ -206,3 +206,31 @@ def get_service_history_multi(service_id, limit=50):
             return sorted(list(data_map.values()), key=lambda x: x["timestamp"])
     finally:
         release_connection(conn)
+
+
+def save_performance_test(service_id, loss, latency, throughput):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO service_performance (service_id, packet_loss_pct, avg_latency_ms, throughput_pps)
+                VALUES (%s, %s, %s, %s)
+            """, (service_id, loss, latency, throughput))
+            conn.commit(conn)
+    finally:
+        release_connection()
+
+def get_lastest_performance(service_id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT packet_loss_pct, avg_latency_ms
+                        FROM service_performance
+                        WHERE service_id = %s
+                        ORDER BY timestamp DESC
+                        LIMIT 1
+            """, (service_id,))
+            return cur.fetchone()
+    finally:
+        release_connection(conn)

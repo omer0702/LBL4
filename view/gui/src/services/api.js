@@ -26,3 +26,29 @@ export const fetchServiceBackends = async (id) => {
     const response = await fetch(`${API_BASE_URL}/services/${id}/backends`);
     return response.json();
 };
+
+
+export const adminDeployCluster = async () => {
+    const res = await fetch(`${API_BASE_URL}/admin/deploy-cluster`, { method: 'POST' });
+    return res.json();
+};
+
+export const adminCleanup = async () => {
+    const res = await fetch(`${API_BASE_URL}/admin/cleanup`, { method: 'POST' });
+    return res.json();
+};
+
+export const adminRunStress = async () => {
+    const res = await fetch(`${API_BASE_URL}/admin/run-stress`, { method: 'POST' });
+    return res.json();
+};
+
+export const adminAddBackend = async (suffix, id) => {
+    const res = await fetch(`${API_BASE_URL}/admin/add-backend/${suffix}/${id}`, { method: 'POST' });
+    return res.json();
+};
+
+export const fetchServicePerformance = async (id) => {
+    const response = await fetch(`${API_BASE_URL}/services/${id}/performance`);
+    return response.json();
+}

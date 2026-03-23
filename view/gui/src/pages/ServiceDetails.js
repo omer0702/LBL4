@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Activity, Server, Search, BarChart3, PieChart as PieIcon } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,PieChart, Pie, Cell, Legend } from 'recharts';
-import { fetchServiceMetrics, fetchServiceBackends, fetchOverview } from '../services/api';
+import { fetchServiceMetrics, fetchServiceBackends, fetchOverview , fetchServicePerformance} from '../services/api';
 import { useGlobal } from '../context/GlobalContext';
 
 const COLORS = ['#38bdf8', '#818cf8', '#c084fc', '#fb7185', '#34d399'];
@@ -17,6 +17,7 @@ const ServiceDetails = () => {
     const [metrics, setMetrics] = useState([]);
     const [backends, setBackends] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [perf, setPerf] = useState({packet_loss: 0, avg_latency: 0})
 
     // console.log(metrics);
     // console.log(backends);
@@ -34,12 +35,13 @@ const ServiceDetails = () => {
         return obj;
     });
 
+
     const loadData = async () => {
         try {
-            const [m, b] = await Promise.all([fetchServiceMetrics(currentId), fetchServiceBackends(currentId)]);
-            // הגנה: וודא שערכי null הופכים למערכים ריקים
+            const [m, b, p] = await Promise.all([fetchServiceMetrics(currentId), fetchServiceBackends(currentId), fetchServicePerformance(currentId)]);
             setMetrics(Array.isArray(m) ? m : []);
             setBackends(Array.isArray(b) ? b : []);
+            setPerf(Array.isArray(p) ? p : []);
         } catch (e) {
             console.error("Error loading service details:", e);
         } finally {
@@ -109,11 +111,13 @@ const ServiceDetails = () => {
                 <div className="flex items-center gap-4">
                     <div className="bg-lb-sidebar p-3 rounded-lg border border-slate-700">
                         <p className="text-sm text-slate-500">Packet Loss</p>
-                        <p className="font-bold text-red-400">0.0%</p>
+                        <p className={`font-bold ${perf.packet_loss > 0 ? 'text-red-400':'text-green-400'}`}>
+                            {perf.packet_loss}%
+                        </p>
                     </div>
                     <div className="bg-lb-sidebar p-3 rounded-lg border border-slate-700">
                         <p className="text-xs text-gray-500">AVG Latency</p>
-                        <p className="font-bold text-lb-accent">N/A ms</p>
+                        <p className="font-bold text-lb-accent">{perf.avg_latency} ms</p>
                     </div>
                 </div>
             </div>

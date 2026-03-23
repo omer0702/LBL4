@@ -2,6 +2,8 @@ import socket
 import time
 import statistics 
 
+#from model.backend.db.queries import save_performance_test
+
 VIP = "10.0.0.100"
 PORT = 9000
 MESSAGE = "Hello, World!"
@@ -53,6 +55,9 @@ def stress_test():
         print(f"throughput: {throughput}")
     else:
         print("test failed, no packets(ACK) returned")
+
+    
+    #save_performance_test(1, (lost_packets/NUM_REQUESTS)*100, avg, throughput)
 
 
 if __name__ == "__main__":

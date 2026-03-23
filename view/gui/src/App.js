@@ -4,6 +4,7 @@ import { GlobalProvider } from "./context/GlobalContext";
 import Sidebar from "./components/Sidebar";
 import Dashboard from './pages/Dashboard';
 import ServiceDetails from './pages/ServiceDetails';
+import Logs from './pages/Logs';
 
 const PlaceHolder = ({ title }) => (
   <div className="p-8 text-2xl font-bold">
@@ -35,7 +36,7 @@ function App(){
               <Route path="/services" element={<ServiceDetails />} />
               <Route path="/services/:id" element={<ServiceDetails />} />
               <Route path="/traffic" element={<PlaceHolder title="Live Traffic" />} />
-              <Route path="/logs" element={<PlaceHolder title="System Logs" />} />
+              <Route path="/logs" element={<Logs />} />
               <Route path="/admin" element={<PlaceHolder title="Admin Control" />} />
             </Routes>
           </main>
