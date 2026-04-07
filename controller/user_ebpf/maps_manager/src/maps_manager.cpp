@@ -8,7 +8,8 @@
 #include <map>
 #include "../../session_manager/include/session_manager.h"
 // #include <cstdio>
- 
+#include <fstream>
+#include <sstream>
 
 MapsManager::MapsManager(struct balancer_bpf* skel): skel(skel) {
 }
@@ -110,7 +111,7 @@ bool MapsManager::update_service_map2(uint32_t service_ip, const std::vector<uin
     return true;
 }
 
-bool MapsManager::add_backend(int socket_fd, uint32_t ip, uint16_t port, uint8_t* mac) {
+bool MapsManager::add_backend(int socket_fd, uint32_t ip, uint16_t port, uint8_t* mac2) {
     int logical_id = lb::session::SessionManager::instance().get_logical_id(socket_fd);
     if(logical_id==-1){
         std::cerr<<"[MAPS MANAGER] no logical id found for fd:"<<socket_fd<<std::endl;
@@ -121,7 +122,52 @@ bool MapsManager::add_backend(int socket_fd, uint32_t ip, uint16_t port, uint8_t
     info.ip = ip;
     info.port = port;
     info.is_active = 1;
-    memcpy(info.mac, mac, 6);
+    //read suitable ifindex and mac address to backend from tmp/backend_ifindex_map/ that run_backends.sh created:
+    // int ifindex = -1;
+    // uint8_t mac[6] = {0};
+
+    // std::ifstream ifs("/tmp/backend_ifindex_map");
+    // std::string line;
+
+    // while (std::getline(ifs, line)) {
+    //     std::istringstream iss(line);
+    //     int id;
+    //     int idx;
+    //     std::string mac_str;
+
+    //     if (iss >> id >> idx >> mac_str) {
+    //         if (id == logical_id) {
+    //             ifindex = idx;
+
+    //             //  parsing MAC string -> byte array
+    //             int values[6];
+    //             if (sscanf(mac_str.c_str(), "%x:%x:%x:%x:%x:%x",
+    //                     &values[0], &values[1], &values[2],
+    //                     &values[3], &values[4], &values[5]) == 6) {
+
+    //                 for (int i = 0; i < 6; i++) {
+    //                     mac[i] = (uint8_t)values[i];
+    //                 }
+    //             } else {
+    //                 std::cerr << "[MAPS MANAGER] failed to parse MAC\n";
+    //                 return false;
+    //             }
+
+    //             break;
+    //         }
+    //     }
+    // }
+
+    // ifs.close();
+
+    // if (ifindex == -1) {
+    //     std::cerr << "[MAPS MANAGER] no ifindex found for fd:" << socket_fd << std::endl;
+    //     return false;
+    // }
+
+    // info.ifindex = ifindex;
+    // memcpy(info.mac, mac, 6);
+    // std::cout << "[MAPS_MANAGER] backend " << logical_id << " full mac=" << mac << std::endl;
 
     int fd = bpf_map__fd(skel->maps.backends_map);
     int error = bpf_map_update_elem(fd, &logical_id, &info, BPF_ANY);

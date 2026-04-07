@@ -8,6 +8,7 @@
 #define MAX_SERVICES 100
 #define MAX_BACKENDS 256
 #define SIZE 65537
+#define MAX_SESSIONS 10000
 
 struct inner_map{
     __uint(type, BPF_MAP_TYPE_ARRAY);
@@ -37,5 +38,13 @@ struct {
     __type(key, __u32);//backend_id(logical id)
     __type(value, struct backend_stats);
 } stats_map SEC(".maps");
+
+
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, MAX_SESSIONS);
+    __type(key, struct session_key);
+    __type(value, struct session_value);
+} sessions_map SEC(".maps");
 
 #endif

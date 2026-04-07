@@ -23,11 +23,18 @@ sudo sysctl -w net.ipv4.conf.lo.rp_filter=0
 
 sudo sysctl -w net.ipv4.conf.all.rp_filter=0
 
+# sudo sysctl -w net.ipv4.conf.lo.route_localnet=1
+# sudo sysctl -w net.ipv4.conf.tunl_lb.route_localnet=1
+
 # IP="127.0.0.2"
 # echo "configuring $IP"
 # sudo ip addr add $IP/32 dev lo 2>/dev/null
 # sudo "$CLIENT_BIN" $IP > "$SCRIPT_DIR/client_$i.log" 2>&1 &
 # sleep 0.2
+
+sudo iptables -A OUTPUT -p tcp -s 10.0.0.100 --tcp-flags RST RST -j DROP
+sudo sysctl -w net.ipv4.tcp_rfc1337=1
+
 for i in {2..7}
 do
     IP="127.0.0.$i"
