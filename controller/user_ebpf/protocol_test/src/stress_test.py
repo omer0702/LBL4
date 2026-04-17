@@ -147,6 +147,7 @@ def tcp_stress_test():
 
             syn = flags & 0x02
             ack = flags & 0x10
+            fin = flags & 0x11
 
             if dst_ip == SRC_IP and dst_p == src_port:
                 print(f"[CLIENT] received packet from {src_ip}:{src_p} with flags {flags:02x}")
@@ -157,14 +158,57 @@ def tcp_stress_test():
                     ack_packet = build_packet(SRC_IP, VIP, src_port, 80, seq_num + 1, tcph[2]+1, flags=0x10)  # ACK flag
                     sock.sendto(ack_packet, (VIP, 0))
                     print(f"[CLIENT] sent ACK from port {src_port}")
-                    break
+
+                    client_seq = seq_num + 1
+                    server_seq = tcph[2] + 1
+
+                    time.sleep(0.5)
+                    print("[CLIENT] closing connection")
+                    fin_packet = build_packet(SRC_IP, VIP, src_port, 80, client_seq, server_seq, flags=0x11)
+                    sock.sendto(fin_packet, (VIP, 0))
+                    print("[CLIENT] sent FIN")
+                    client_seq += 1
 
                 elif syn:
                     print(f"[CLIENT] received SYN from {src_ip}:{src_port} (unexpected)")
-                elif ack:
-                    print(f"[CLIENT] received ACK from {src_ip}:{src_port} (unexpected)")
+
+                elif fin:
+                    print("[CLIENT] got FIN from server")
+                    server_seq = tcph[2] + 1
+                    ack_to_fin_packet = build_packet(SRC_IP, VIP, src_port, 80, seq_num, ack, flags=0x10)
+                    sock.sendto(ack_to_fin_packet, (VIP, 0))
+                    print("[CLIENT] sent ACK for FIN, connection closed from both sides")
+                    break
+
+                elif ack and not fin:
+                    print(f"[CLIENT] received ACK from {src_ip}:{src_port}")
+
+
+def tcp_close_test():
+    print("\n TCP CLOSE TEST")
+    for i in range(5):
+        src_port = 20000 + i
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('192.168.1.50', src_port))
+
+        try:
+            print(f"\n[CLIENT] connecting from port {src_port}")
+            sock.connect((VIP, 80))
+
+            print("[CLIENT] connected, sending data...")
+            sock.send(b"hello")
+
+            time.sleep(0.5)
+
+            print("[CLIENT] closing socket(FIN)")
+            sock.close()
+
+        except Exception as e:
+            print(f"[CLIENT]error: {e}")
+
+        time.sleep(1)
 
 
 if __name__ == "__main__":
-    #stress_test()
     tcp_stress_test()

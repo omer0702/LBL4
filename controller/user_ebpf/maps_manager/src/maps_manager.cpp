@@ -264,3 +264,57 @@ void MapsManager::wait_for_update(int seconds){
 void MapsManager::change_shutdown(){
     shutdown = true;
 }
+
+uint64_t now_ns(){
+    timespec ts{};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    return (uint64_t)ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+}
+
+void MapsManager::cleanup_sessions(uint64_t tcp_timeout, uint64_t udp_timeout){
+    int removed = 0;
+    struct session_key next_key{};
+    struct session_key *curr_key = nullptr;
+    struct session_value value{};
+    //uint64_t now = std::chrono::steady_clock::now().time_since_epoch().count();
+    uint64_t now = now_ns();
+
+    int fd = bpf_map__fd(skel->maps.sessions_map);
+    while(bpf_map_get_next_key(fd, curr_key, &next_key) == 0){
+        if(bpf_map_lookup_elem(fd, &next_key, &value) == 0){
+            uint64_t diff = now - value.last_seen;
+            bool exprired = false;
+            if(next_key.protocol == IPPROTO_TCP){
+                exprired = diff > tcp_timeout;
+            }
+            else if(next_key.protocol == IPPROTO_UDP){
+                exprired = diff > udp_timeout;
+            }
+
+            if(exprired){
+                std::cout << "[MAPS MANAGER] deleting expried session, protocol: " << (int)next_key.protocol << std::endl;
+                bpf_map_delete_elem(fd, &next_key);
+                removed++;
+            }
+        }
+
+        curr_key = &next_key;
+    }
+    std::cout << "[MAPS MANAGER] removed " << removed << " sessions\n";
+}
+
+void MapsManager::print_sessions_count(){
+    struct session_key next_key{};
+    struct session_key *curr_key = nullptr;
+    struct session_value value{};
+
+    int fd = bpf_map__fd(skel->maps.sessions_map);
+    while(bpf_map_get_next_key(fd, curr_key, &next_key) == 0){
+        if(bpf_map_lookup_elem(fd, &next_key, &value) == 0){  
+            std::cout << "new session: " << (int)next_key.protocol << " " << next_key.src_ip << ":" << next_key.src_port << "-> "
+            << next_key.dst_ip << ":" << next_key.dst_port << " backend= " << value.backend_id << " ages: " << value.last_seen << std::endl;
+        }
+        curr_key = &next_key;
+    }
+}

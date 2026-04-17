@@ -56,6 +56,9 @@ int main() {
             maps_manager.wait_for_update(5);
             if(!keep_running) break; //if we woke up because of shutdown
 
+            maps_manager.cleanup_sessions(4000000000ULL, 3000000000ULL);//replace to 30,5 sec after testing
+            maps_manager.print_sessions_count();
+
             std::unordered_map<std::string, uint32_t> services = sm.get_all_service_vips();
 
             for(const auto& [name, vip] : services){
@@ -81,7 +84,7 @@ int main() {
         }
     });
 
-    maglev_thread.detach();//maybe replace with join
+    maglev_thread.detach();
 
 
     int tcp_listen_fd = lb::io_epoll::start_listen_tcp(PORT);

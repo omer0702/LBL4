@@ -159,8 +159,26 @@ void start_tcp_receiver(uint16_t my_assigned_port) {
 
         std::string key = std::to_string(ip->saddr) + ":" + std::to_string(ntohs(tcp->source));
 
+        if (tcp->fin){
+            std::cout << "[TCP] FIN received from " << inet_ntoa(*(in_addr*)&ip->saddr) << ":" << ntohs(tcp->source) << std::endl;
+
+            auto it = sessions.find(key);
+            if(it != sessions.end()){
+                it->second.client_seq = ntohl(tcp->seq) + 1;
+                //it->second.client_ack = ntohl(tcp->ack);
+                send_tcp_packet(raw_sock, it->second, 0x10);
+
+                std::cout << "[TCP] sent ACK for FIN\n";
+
+                send_tcp_packet(raw_sock, it->second, 0x11);
+                std::cout << "[TCP] sent FIN to client\n";
+                sessions.erase(it);
+
+                it->second.server_seq += 1;
+            }
+        }
         // טיפול ב-SYN
-        if (tcp->syn && !tcp->ack) {
+        else if (tcp->syn && !tcp->ack) {
             tcp_session s;
             s.client_ip = ip->saddr;
             s.client_port = ntohs(tcp->source);
@@ -196,6 +214,7 @@ void start_tcp_receiver(uint16_t my_assigned_port) {
                 std::cout << "[TCP] Acked data from " << key << std::endl;
             }
         }
+        
     }
     close(raw_sock);
 }

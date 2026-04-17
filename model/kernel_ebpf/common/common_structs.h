@@ -22,6 +22,7 @@ struct session_key{
 struct session_value {
     __u32 backend_id;
     __u64 last_seen;
+    __u8 tcp_state;//for fin
 };
 
 struct backend_stats{
