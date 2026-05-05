@@ -24,6 +24,7 @@ public:
     std::map<uint32_t, backend_stats> get_all_stats(const std::vector<uint32_t>& active_ids);
     void cleanup_sessions(uint64_t tcp_timeout, uint64_t udp_timeout);
     void print_sessions_count();
+    std::vector<SessionEntry> get_all_sessions();
 
     void trigger_rebuild();
     void wait_for_update(int seconds);

@@ -52,3 +52,8 @@ export const fetchServicePerformance = async (id) => {
     const response = await fetch(`${API_BASE_URL}/services/${id}/performance`);
     return response.json();
 }
+
+export const fetchLiveTraffic = async () => {
+    const response = await fetch(`${API_BASE_URL}/live-traffic`);
+    return response.json();
+};

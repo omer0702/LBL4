@@ -234,3 +234,37 @@ def get_lastest_performance(service_id):
             return cur.fetchone()
     finally:
         release_connection(conn)
+
+
+def save_live_sessions(sessions):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            for session in sessions:
+                #insert or update new sessions:
+                cur.execute("""
+                    INSERT INTO live_sessions (src_ip, dst_ip, src_port, dst_port, protocol, last_seen)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (src_ip, dst_ip, src_port, dst_port, protocol)
+                    DO UPDATE SET last_seen = EXCLUDED.last_seen
+                """, (session['src_ip'], session['dst_ip'], session['src_port'], session['dst_port'], session['protocol'], datetime.fromtimestamp(session['timestamp'])))
+            conn.commit()
+    finally:
+        release_connection(conn)
+
+def get_sessions():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT src_ip, dst_ip, src_port, dst_port, protocol, last_seen
+                FROM live_sessions
+                WHERE last_seen > NOW() - INTERVAL '60 minutes'
+            """)
+            rows = cur.fetchall()
+            return [{
+                "src_ip": r[0], "dst_ip": r[1], "src_port": r[2], 
+                "dst_port": r[3], "protocol": r[4], "timestamp": r[5].isoformat()
+            } for r in rows]
+    finally:
+        release_connection(conn)

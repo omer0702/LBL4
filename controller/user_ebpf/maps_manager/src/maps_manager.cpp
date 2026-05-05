@@ -51,7 +51,7 @@ bool MapsManager::update_service_map(uint32_t service_ip, const std::vector<uint
             }
         }
         else{
-            std::cout<<"warning!!\n";
+            //std::cout<<"warning!!\n";
         }
     }
 
@@ -179,20 +179,25 @@ bool MapsManager::add_backend(int socket_fd, uint32_t ip, uint16_t port, uint8_t
     return true;
 }
 
-bool MapsManager::update_backend_status(uint32_t backend_id, bool is_active) {
+bool MapsManager::update_backend_status(uint32_t socket_fd, bool is_active) {
+    int logical_id = lb::session::SessionManager::instance().get_logical_id(socket_fd);
+    if(logical_id==-1){
+        std::cerr<<"[MAPS MANAGER] no logical id found for fd:"<<socket_fd<<std::endl;
+        return false;
+    }
     int fd = bpf_map__fd(skel->maps.backends_map);
     backend_info info{};
-    int error = bpf_map_lookup_elem(fd, &backend_id, &info);
+    int error = bpf_map_lookup_elem(fd, &logical_id, &info);
     if(error){
-        std::cerr << "[MAPS_MANAGER]Failed to find backend: " << backend_id << std::endl;
+        std::cerr << "[MAPS_MANAGER]Failed to find backend: " << logical_id << std::endl;
         return false;
     }
 
     info.is_active = is_active ? 1 : 0;
 
-    error = bpf_map_update_elem(fd, &backend_id, &info, BPF_ANY);
+    error = bpf_map_update_elem(fd, &logical_id, &info, BPF_ANY);
     if(error){
-        std::cerr << "[MAPS_MANAGER]Failed to update backend status: " << backend_id << std::endl;
+        std::cerr << "[MAPS_MANAGER]Failed to update backend status: " << logical_id << std::endl;
         return false;
     }
 
@@ -317,4 +322,32 @@ void MapsManager::print_sessions_count(){
         }
         curr_key = &next_key;
     }
+}
+
+
+std::vector<SessionEntry> MapsManager::get_all_sessions(){
+    std::vector<SessionEntry> sessions;
+    struct session_key next_key{};
+    struct session_key *curr_key = nullptr;
+    struct session_value value{};
+
+    int fd = bpf_map__fd(skel->maps.sessions_map);
+    while(bpf_map_get_next_key(fd, curr_key, &next_key) == 0){
+        if(bpf_map_lookup_elem(fd, &next_key, &value) == 0){  
+            sessions.push_back(
+                SessionEntry{
+                    next_key.src_ip,
+                    next_key.dst_ip,
+                    next_key.src_port,
+                    next_key.dst_port,
+                    next_key.protocol,
+                    value.last_seen
+                }
+            );
+        }
+        curr_key = &next_key;
+    }
+
+    return sessions;
+
 }

@@ -2,10 +2,11 @@ import grpc
 from concurrent import futures
 import internal_stats_pb2
 import internal_stats_pb2_grpc
-from db.queries import get_or_create_backend, insert_metrics, insert_event
+from db.queries import get_or_create_backend, insert_metrics, insert_event, save_live_sessions
 from datetime import datetime
 import ipaddress
-
+import socket
+import struct
 
 
 class StatsCollectorServicer(internal_stats_pb2_grpc.StatsCollectorServicer):
@@ -40,6 +41,26 @@ class StatsCollectorServicer(internal_stats_pb2_grpc.StatsCollectorServicer):
             print(f"\nError logging event: {e}\n")
             return internal_stats_pb2.LogResponse(success=False)
 
+    def UpdateLiveSessions(self, request, context):
+        sessions_list = []
+        for session in request.sessions:
+            src_ip = socket.inet_ntoa(struct.pack('<L', session.src_ip))
+            dst_ip = socket.inet_ntoa(struct.pack('<L', session.dst_ip))
+
+            session_data = {
+                'src_ip': src_ip,
+                'dst_ip': dst_ip,
+                'src_port': session.src_port,
+                'dst_port': session.dst_port,
+                'protocol': "TCP" if session.protocol == 6 else "UDP",
+                'timestamp': session.timestamp
+            }
+
+            sessions_list.append(session_data)
+
+        save_live_sessions(sessions_list)
+
+        return internal_stats_pb2.Empty()
 
 def serve_grpc():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))

@@ -74,6 +74,11 @@ async def get_performance(service_id: int):
     return {"packet_loss": data[0], "avg_latency": data[1]}
 
     
+@app.get("/api/live-traffic")
+async def get_live_traffic():
+    """שליפת המידע על הסשנים החיים מה-DB"""
+    return queries.get_sessions()
+
 #endpoints for simulator:
 @router.post("/deploy-cluster")
 async def deploy_cluster():

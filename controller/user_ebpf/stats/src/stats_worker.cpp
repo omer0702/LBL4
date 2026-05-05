@@ -96,4 +96,27 @@ void StatsWorker::collect_metrics(){
     }
 }
 
+void StatsWorker::collect_live_sessions(){
+    lb::stats::SessionUpdateRequest req;
+    auto sessions = maps_manager.get_all_sessions();
+
+    for(const auto& session : sessions){
+        lb::stats::SessionInfo* info = req.add_sessions();
+        info->set_src_ip(session.src_ip);
+        info->set_dst_ip(session.dst_ip);
+        info->set_src_port(session.src_port);
+        info->set_dst_port(session.dst_port);
+        info->set_protocol(session.protocol);
+        info->set_timestamp(session.timestamp);
+    }
+
+    grpc::ClientContext context;
+    lb::stats::Empty resp;
+    grpc::Status status = stats_collector_stub->UpdateLiveSessions(&context, req, &resp);
+
+    if (!status.ok()) {
+        std::cerr << "GRPC Failed to update live sessions: " << status.error_message() << std::endl;
+    }
+
+}
 }

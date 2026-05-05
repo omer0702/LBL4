@@ -24,7 +24,7 @@ const Sidebar = () => {
             <nav className="flex-1 mt-4">
                 <SidebarItem icon={LayoutDashboard} label="Overview" to="/" active={location.pathname === '/'} />
                 <SidebarItem icon={Server} label="Services" to="/services" active={location.pathname.startsWith('/services')} />
-                <SidebarItem icon={Activity} label="Live Traffic" to="/traffic" active={location.pathname === '/traffic'} />
+                <SidebarItem icon={Activity} label="Live Traffic" to="/live-traffic" active={location.pathname === '/live-traffic'} />
                 <SidebarItem icon={FileText} label="System Logs" to="/logs" active={location.pathname === '/logs'} />
                 <SidebarItem icon={Settings} label="Admin Control" to="/admin" active={location.pathname === '/admin'} />
             </nav>

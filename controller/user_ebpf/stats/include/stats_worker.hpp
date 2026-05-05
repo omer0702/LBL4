@@ -32,6 +32,7 @@ public:
 private:
     void run();
     void collect_metrics();
+    void collect_live_sessions();
 
     MapsManager& maps_manager;
     uint32_t interval_ms;

@@ -9,10 +9,10 @@ import random
 VIP = "10.0.0.100"
 PORT = 80
 MESSAGE = "Hello, World!"
-NUM_REQUESTS = 100
+NUM_REQUESTS = 300
 TIMEOUT = 1.0
 
-def stress_test():
+def udp_stress_test():
     results = []
     latencies = []
     lost_packets = 0
@@ -105,19 +105,125 @@ def build_packet(src_ip, dst_ip, src_port, dst_port, seq_num, ack_num=0, flags=0
     psh = struct.pack('!4s4sBBH', ip_saddr, ip_daddr, placeholder, protocol, tcp_length)
     tcp_check = checksum(psh + tcp_header)
 
-    tcp_header = struct.pack('!HHLLBBH', src_port, dst_port, seq_num, ack_num, (tcp_data_offset << 4), tcp_flags, tcp_window) + struct.pack('H', tcp_check) + struct.pack('!H', tcp_urg_ptr)
+    tcp_header = struct.pack('!HHLLBBH', src_port, dst_port, seq_num, ack_num, (tcp_data_offset << 4), tcp_flags, tcp_window) + struct.pack('!H', tcp_check) + struct.pack('!H', tcp_urg_ptr)
 
     return ip_header + tcp_header
 
 
 def tcp_stress_test():
+    # SRC_IP = "192.168.1.50"
+    # INTERFACE = "lo"
+    # print("Starting TCP SYN check")
+
+    # sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+    # sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+
+    # recv_sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(3))
+    # recv_sock.bind((INTERFACE, 0))
+
+    # src_port = 20000
+    # seq_num = random.randint(0, 100000)
+
+    # packet = build_packet(SRC_IP, VIP, src_port, 80, seq_num, flags=0x02)  # SYN flag
+    # sock.sendto(packet, (VIP, 0))
+    # print(f"[CLIENT] sent SYN from port {src_port}")
+
+    # start = time.time()
+
+    # while time.time() - start < 2:
+    #     raw_data, _ = recv_sock.recvfrom(65535)
+    #     if len(raw_data) < 54:
+    #         continue
+    #     # eht_header_len = 14
+    #     # data = raw_data[eht_header_len:]
+    #     # if len(data) < 20: continue
+
+    #     # ip_offset = 0#or 4
+    #     # data = raw_data[ip_offset:]
+    #     ip_start = 14
+    #     # if ip_start == -1:
+    #     #     continue
+    #     ip_header = raw_data[ip_start:ip_start + 20]
+
+    #     # if len(ip_start) < 20: continue
+
+    #     # ip_header = data[:20]
+    #     iph = struct.unpack('!BBHHHBBH4s4s', ip_header)
+
+    #     if iph[6] != 6: continue
+
+    #     src_ip = socket.inet_ntoa(iph[8])
+    #     dst_ip = socket.inet_ntoa(iph[9])
+
+    #     tcp_start = ip_start + 20
+
+    #     tcp_header = raw_data[tcp_start : tcp_start + 20]
+    #     tcph = struct.unpack('!HHLLBBHHH', tcp_header)
+
+    #     src_p = tcph[0]
+    #     dst_p = tcph[1]
+    #     flags = tcph[5]
+
+    #     syn = flags & 0x02
+    #     ack = flags & 0x10
+    #     fin = flags & 0x01
+    #     rst = flags & 0x04
+
+    #     if dst_ip == SRC_IP and dst_p == src_port:
+    #         print(f"[CLIENT] received packet from {src_ip}:{src_p} with flags {flags:02x}")
+
+    #         if rst:
+    #             print("got RST packet, connection reset by server")
+    #             seq_num = random.randint(0, 100000)
+    #             packet = build_packet(SRC_IP, VIP, src_port, 80, seq_num, flags=0x02)
+    #             sock.sendto(packet, (VIP, 0))
+    #             print("reconnect to service")
+
+    #         elif syn and ack:
+    #             print(f"[CLIENT] SYN-ACK received! handshake successful with {src_ip}:{src_port}")
+    #             #send ACK
+    #             ack_packet = build_packet(SRC_IP, VIP, src_port, 80, seq_num + 1, tcph[2]+1, flags=0x10)  # ACK flag
+    #             sock.sendto(ack_packet, (VIP, 0))
+    #             print(f"[CLIENT] sent ACK from port {src_port}")
+
+    #             client_seq = seq_num + 1
+    #             server_seq = tcph[2] + 1
+
+    #             time.sleep(10)#in this time i kill backend(protocol_client)
+    #             data_packet = build_packet(SRC_IP, VIP, src_port, 80, client_seq, server_seq, flags=0x10)  # ACK2
+    #             sock.sendto(data_packet, (VIP, 0))
+    #             print("[CLIENT] sent probe ACK packet")
+    #             #client_seq += 1
+    #             time.sleep(5)
+
+    #             # print("[CLIENT] closing connection")
+    #             # fin_packet = build_packet(SRC_IP, VIP, src_port, 80, client_seq, server_seq, flags=0x11)
+    #             # sock.sendto(fin_packet, (VIP, 0))
+    #             # print("[CLIENT] sent FIN")
+    #             # client_seq += 1
+
+    #         elif syn:
+    #             print(f"[CLIENT] received SYN from {src_ip}:{src_port} (unexpected)")
+
+            
+
+    #         elif fin:
+    #             print("[CLIENT] got FIN from server")
+    #             server_seq = tcph[2] + 1
+    #             ack_to_fin_packet = build_packet(SRC_IP, VIP, src_port, 80, seq_num, ack, flags=0x10)
+    #             sock.sendto(ack_to_fin_packet, (VIP, 0))
+    #             print("[CLIENT] sent ACK for FIN, connection closed from both sides")
+    #             break
+
+    #         elif ack and not fin:
+    #             print(f"[CLIENT] received ACK from {src_ip}:{src_port}")
+
     SRC_IP = "192.168.1.50"
-    print("Starting TCP SYN check")
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
 
-    recv_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+    recv_sock = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)        
 
     for i in range(5):
         src_port = 20000 + i
@@ -148,6 +254,7 @@ def tcp_stress_test():
             syn = flags & 0x02
             ack = flags & 0x10
             fin = flags & 0x11
+            rst = flags & 0x04
 
             if dst_ip == SRC_IP and dst_p == src_port:
                 print(f"[CLIENT] received packet from {src_ip}:{src_p} with flags {flags:02x}")
@@ -183,6 +290,13 @@ def tcp_stress_test():
                 elif ack and not fin:
                     print(f"[CLIENT] received ACK from {src_ip}:{src_port}")
 
+                elif rst:
+                    print("got RST packet, connection reset by server")
+                    seq_num = random.randint(0, 100000)
+                    packet = build_packet(SRC_IP, VIP, src_port, 80, seq_num, flags=0x02)
+                    sock.sendto(packet, (VIP, 0))
+                    print("reconnect to service")
+
 
 def tcp_close_test():
     print("\n TCP CLOSE TEST")
@@ -211,4 +325,4 @@ def tcp_close_test():
 
 
 if __name__ == "__main__":
-    tcp_stress_test()
+    udp_stress_test()

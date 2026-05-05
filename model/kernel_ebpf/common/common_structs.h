@@ -30,4 +30,13 @@ struct backend_stats{
     __u64 num_of_bytes;
 };
 
+struct SessionEntry{
+    __u32 src_ip;
+    __u32 dst_ip;
+    __u16 src_port;
+    __u16 dst_port;
+    __u8 protocol;
+    __u64 timestamp;
+};
+
 #endif 

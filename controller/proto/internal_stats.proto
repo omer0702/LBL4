@@ -44,7 +44,23 @@ message LogResponse {
     bool success = 1;
 }
 
+message SessionInfo {
+    uint32 src_ip = 1;
+    uint32 dst_ip = 2;
+    uint32 src_port = 3;
+    uint32 dst_port = 4;
+    uint64 protocol = 5;
+    uint64 timestamp = 6;
+}
+
+message SessionUpdateRequest {
+    repeated SessionInfo sessions = 1;
+}
+
+message Empty{}
+
 service StatsCollector {
     rpc ExportStats(StatsSample) returns (StatsResponse);
     rpc LogEvent(EventRequest) returns (LogResponse);
+    rpc UpdateLiveSessions(SessionUpdateRequest) returns (Empty);
 }

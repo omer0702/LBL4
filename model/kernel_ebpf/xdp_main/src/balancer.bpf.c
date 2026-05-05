@@ -183,35 +183,28 @@ static __always_inline int should_create_session(__u8 proto, void *l4_hdr){
 
 static __always_inline __u32 get_or_create_backend(struct session_key *key, void *l4_hdr, __u8 proto){
     struct session_value *sess = bpf_map_lookup_elem(&sessions_map, key);
-
+    bpf_printk("lookup session: src=%x, sport=%u, dst=%x, dport=%u, proto=%u\n", key->src_ip, bpf_ntohs(key->src_port), key->dst_ip, bpf_ntohs(key->dst_port), key->protocol);
     if(sess){
+        bpf_printk("session exists: backend %u\n", sess->backend_id);
         sess->last_seen = bpf_ktime_get_ns();
-
         if (proto == IPPROTO_TCP){
             struct tcphdr *tcp = l4_hdr;
-
             if (tcp->rst){
-                bpf_map_delete_elem(&sessions_map, key);//put in comment to check timeout mechanism
+                //bpf_map_delete_elem(&sessions_map, key);//put in comment to check timeout mechanism
             }
-
             //delete after double fin:
             if(tcp->fin){
-                
-                
-                bpf_printk("XDP: FIN packet\n");
-
+                //bpf_printk("XDP: FIN packet\n");
                 sess->tcp_state = TCP_FIN_WAIT1;
-            }   
-
+            }
             if(sess->tcp_state == TCP_FIN_WAIT1 && tcp->ack && !tcp->fin && !tcp->syn){
                 bpf_map_delete_elem(&sessions_map, key);
-                bpf_printk("XDP: deleted successfully");
+                //bpf_printk("XDP: deleted successfully");
             }
         }
-
         return sess->backend_id;
     }
-
+    bpf_printk("session miss\n");
     // else if(!sess && (proto == IPPROTO_TCP)){//every packet with no sess and no syn, should be drop
     //     bpf_printk("XDP: here2\n");
     //     struct tcphdr *tcp = l4_hdr;
@@ -224,7 +217,8 @@ static __always_inline __u32 get_or_create_backend(struct session_key *key, void
     if(should_create_session(proto, l4_hdr)){
         struct session_value new_sess = {
                 .backend_id = backend_id,
-                .last_seen = bpf_ktime_get_ns()
+                .last_seen = bpf_ktime_get_ns(),
+                .tcp_state = 0
             };
         bpf_map_update_elem(&sessions_map, key, &new_sess, BPF_ANY);
     }
@@ -235,6 +229,90 @@ static __always_inline __u32 get_or_create_backend(struct session_key *key, void
 static __always_inline int is_service_vip(__u32 address){
     void *m = bpf_map_lookup_elem(&services_map, &address);
     return m != NULL;
+}
+
+
+static __always_inline int send_rst_packet(struct xdp_md* ctx){
+    void* data = (void*)(long)ctx->data;
+    void* data_end = (void*)(long)ctx->data_end;
+
+    struct ethhdr *eth = data;
+    if ((void*)(eth + 1) > data_end) {
+        return XDP_PASS;
+    }
+
+    if(eth->h_proto != bpf_htons(ETH_P_IP)){
+        return XDP_PASS;
+    }
+
+    struct iphdr *ip = (struct iphdr *)(eth + 1);
+    if ((void*)(ip + 1) > data_end) {
+        return XDP_PASS;
+    }
+
+    if(ip->protocol != IPPROTO_TCP){
+        return XDP_PASS;
+    }
+
+    struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
+    if ((void*)(tcp + 1) > data_end) {
+        return XDP_PASS;
+    }
+
+    //mac exchange:
+    __u8 tcp_mac[6];
+    __builtin_memcpy(tcp_mac, eth->h_dest, 6);
+    __builtin_memcpy(eth->h_dest, eth->h_source, 6);
+    __builtin_memcpy(eth->h_source, tcp_mac, 6);
+
+    //IP exchange:
+    __u32 src_ip = ip->saddr;
+    ip->saddr = ip->daddr;
+    ip->daddr = src_ip;
+    ip->tot_len = bpf_htons(sizeof(struct iphdr) + sizeof(struct tcphdr));
+    ip->check = 0;
+    ip->check = ip_checksum(ip);
+
+    //TCP ports and flags:
+    __u16 src_port = tcp->source;
+    tcp->source = tcp->dest;
+    tcp->dest = src_port;
+    __u8 had_ack = tcp->ack;
+    __u32 old_seq = tcp->seq;
+    __u32 old_ack = tcp->ack_seq;
+    tcp->rst = 1;
+    tcp->syn = 0;
+    tcp->ack = 0;
+    tcp->fin = 0;
+    tcp->psh = 0;
+    tcp->urg = 0;
+
+    if(had_ack){
+        tcp->seq = old_ack;
+        tcp->ack = 0;
+        tcp->ack_seq = 0;
+    } else {
+        tcp->ack_seq = bpf_htonl(bpf_ntohl(old_seq) + 1);
+        tcp->ack = 1;
+        tcp->seq = 0;
+    }
+    
+    tcp->check = 0;
+    __u32 csum = 0;
+    csum = bpf_csum_diff(0, 0, (__be32 *)&ip->saddr, 4, csum);
+    csum = bpf_csum_diff(0, 0, (__be32 *)&ip->daddr, 4, csum);
+
+    __u32 pseudo = bpf_htonl((IPPROTO_TCP << 16) | sizeof(struct tcphdr));
+    csum = bpf_csum_diff(0, 0, &pseudo, sizeof(pseudo), csum);
+
+    csum = bpf_csum_diff(0, 0, (__be32 *)tcp, sizeof(struct tcphdr), csum);
+
+    csum = (csum & 0xFFFF) + (csum >> 16);
+    csum = (csum & 0xFFFF) + (csum >> 16);
+
+    tcp->check = ~csum;
+
+    return XDP_TX;
 }
 
 SEC("xdp")
@@ -269,47 +347,23 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
         return XDP_PASS;
     }
 
-    // //parsing ethernet
-    // struct ethhdr *eth = data;
-    // if ((void*)(eth + 1) > data_end) {
-    //     return XDP_PASS;
-    // }
-
-    // if(eth->h_proto != bpf_htons(ETH_P_IP)){
-    //     return XDP_PASS;
-    // }
-
-    // //parsing ipv4
-    // struct iphdr *ip = (struct iphdr *)(eth + 1);
-    // if ((void*)(ip + 1) > data_end) {
-    //     return XDP_PASS;
-    // }
-
-    // //only UDP
-    // if(ip->protocol != IPPROTO_UDP){
-    //     return XDP_PASS;
-    // }
-
-
-    // struct udphdr *udp;
-    // udp = data + sizeof(struct ethhdr) + sizeof(struct iphdr);
-    // if((void *)(udp + 1) > data_end){
-    //     return XDP_PASS;
-    // }
-
-    //lookup service
-    // __u32 service_ip = ip->daddr;
-    // bpf_printk("XDP: looking for VIP: %pI4\n", &service_ip);
-
-
-
     struct backend_info* backend = bpf_map_lookup_elem(&backends_map, &backend_id);
-    if(!backend || !backend->is_active){
-        //bpf_printk("XDP: failed2!!\n");
-        return XDP_PASS;
+    if(backend){
+        bpf_printk("XDP: backend id is %u, status is %u\n", backend_id, backend->is_active);
     }
-    //bpf_printk("XDP: routing to backend: %d\n", backend->ip);
-    bpf_printk("XDP: the selected backend is with backend_id %u and ip %d", backend_id, &backend->ip);
+    //bpf_printk("XDP: backend status is %u\n", backend->is_active);
+    if(!backend || !backend->is_active){
+        //bpf_printk("XDP: backend is inactive!!\n");
+
+        //bpf_map_delete_elem(&sessions_map, &key);//delete the session if the backend is inactive
+        if(proto == IPPROTO_TCP){
+            bpf_printk("XDP: backend %u crashed, sending RST packet to backend\n", backend_id);
+            return send_rst_packet(ctx);
+        }
+        
+        return XDP_DROP;
+    }
+    //bpf_printk("XDP: the selected backend is with backend_id %u and ip %d", backend_id, &backend->ip);
 
     //DSR:
     if(bpf_xdp_adjust_head(ctx, 0 - (int)sizeof(struct iphdr))){
@@ -335,15 +389,7 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
         return XDP_PASS;
     }
 
-    // struct udphdr *inner_udp = (void*)inner_ip + sizeof(struct iphdr);
-    // if ((void*)(inner_udp + 1) > data_end) {
-    //     return XDP_PASS;
-    // }
-
-    // inner_udp->dest= backend->port;
-    //inner_udp->check = 0;
-
-    //__builtin__memmove(new_eth, (void*)new_eth + sizeof(struct iphdr), sizeof(struct ethhdr));
+    
     *(struct ethhdr *)new_eth = *(struct ethhdr *)((void*)new_eth + sizeof(struct iphdr));
 
     //build outer IP header:
@@ -383,9 +429,7 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
         }
     }
     bpf_printk("XDP: forwarding to backend ID: %d, IP: %pI4, Port: %d\n", backend_id, &backend->ip, backend->port);
-    // __u32 old_ip = ip->daddr;
-    // __u32 new_ip = backend->ip;
-    // ip->daddr = backend->ip;
+
     // //udp->check = 0;
     // // for(int i = 0; i < 6; i++){
     // //     eth->h_dest[i] = backend->mac[i];
@@ -405,29 +449,7 @@ int xdp_balancer_prog(struct xdp_md *ctx) {
     }
 
    
-    // __u8 target_mac[6] = {0x02, 0x42, 0xac, 0x10, 0x00, 0x00};
-    // __u32 backend_ip_host = bpf_ntohl(backend->ip);
-    // target_mac[5] = (__u8)(backend_ip_host & 0xFF);
-    // __builtin_memcpy(new_eth->h_dest, target_mac, 6);
-
-   
-    // __u8 lb_mac[6] = {0xb6, 0xdc, 0x34, 0xf6, 0x0a, 0x1a}; 
-    // __builtin_memcpy(new_eth->h_source, lb_mac, 6);
-
     
-    // new_eth->h_proto = bpf_htons(ETH_P_IP);
-
-    // bpf_printk("sending to IP %pI4 with MAC suffix: %x\n", &backend->ip, target_mac[5]);
-
-    // bpf_printk("MAC address: %x:%x:%x:%x:%x:%x\n", backend->mac[0], backend->mac[1], backend->mac[2], backend->mac[3], backend->mac[4], backend->mac[5]);
-    // __builtin_memcpy(new_eth->h_dest, backend->mac, 6);
-    // if (backend->ifindex != 0) {
-    //     bpf_printk("Redirecting to ifindex %d\n", backend->ifindex);
-    //     return bpf_redirect(backend->ifindex, 0);
-    // }
-
-    // // fallback
-    // bpf_printk("Fallback to XDP_TX\n");
     return XDP_TX;
 }
 

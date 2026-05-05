@@ -5,6 +5,7 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from './pages/Dashboard';
 import ServiceDetails from './pages/ServiceDetails';
 import Logs from './pages/Logs';
+import LiveTraffic from './pages/LiveTraffic';
 
 const PlaceHolder = ({ title }) => (
   <div className="p-8 text-2xl font-bold">
@@ -35,7 +36,7 @@ function App(){
               <Route path="/" element={<Dashboard />} />
               <Route path="/services" element={<ServiceDetails />} />
               <Route path="/services/:id" element={<ServiceDetails />} />
-              <Route path="/traffic" element={<PlaceHolder title="Live Traffic" />} />
+              <Route path="/live-traffic" element={<LiveTraffic />} />
               <Route path="/logs" element={<Logs />} />
               <Route path="/admin" element={<PlaceHolder title="Admin Control" />} />
             </Routes>
